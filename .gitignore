@@ -1,0 +1,46 @@
+# Built application files
+*.apk
+*.aar
+*.ap_
+*.aab
+
+# Files for the ART/Dalvik VM
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+build/
+
+# Gradle files
+.gradle/
+local.properties
+
+# Android Studio
+*.iml
+.idea/
+.DS_Store
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Keystore files (never commit)
+*.jks
+*.keystore
+
+# Google Services (keep placeholder, ignore real secrets if different path)
+# app/google-services.json is a placeholder - replace locally, do not commit real keys if private
+
+# Firebase / secrets
+service-account*.json
+*-firebase-adminsdk*.json
+
+# Log files
+*.log
+
+# Kotlin
+.kotlin/
