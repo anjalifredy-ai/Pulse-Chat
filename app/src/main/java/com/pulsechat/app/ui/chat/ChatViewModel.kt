@@ -6,16 +6,17 @@ import com.google.firebase.auth.FirebaseAuth
 import com.pulsechat.app.data.model.Message
 import com.pulsechat.app.data.repository.ChatRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
@@ -35,12 +36,29 @@ class ChatViewModel @Inject constructor(
 
     fun load(id: String) {
         conversationId.value = id
+        viewModelScope.launch {
+            chatRepository.markConversationRead(id)
+        }
     }
 
     fun sendMessage(text: String) {
         val id = conversationId.value ?: return
         viewModelScope.launch {
             chatRepository.sendTextMessage(id, text)
+        }
+    }
+
+    fun deleteForMe(messageId: String) {
+        val id = conversationId.value ?: return
+        viewModelScope.launch {
+            chatRepository.deleteMessageForMe(id, messageId)
+        }
+    }
+
+    fun react(messageId: String, emoji: String) {
+        val id = conversationId.value ?: return
+        viewModelScope.launch {
+            chatRepository.addReaction(id, messageId, emoji)
         }
     }
 }

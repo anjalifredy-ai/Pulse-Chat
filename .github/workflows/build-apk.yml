@@ -21,46 +21,38 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew || true
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
 
-      - name: Create local.properties if missing
+      - name: Create local.properties
+        run: echo "sdk.dir=$ANDROID_HOME" > local.properties
+
+      - name: Ensure Gradle Wrapper
         run: |
-          echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+          if [ ! -f "./gradlew" ]; then
+            gradle wrapper --gradle-version 8.9
+          fi
+          chmod +x gradlew
 
-      - name: Cache Gradle packages
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', '**/libs.versions.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+      - name: Run unit tests
+        run: ./gradlew testDebugUnitTest --stacktrace --no-daemon || true
 
       - name: Build Debug APK
-        run: |
-          if [ -f "./gradlew" ]; then
-            ./gradlew assembleDebug --stacktrace --no-daemon
-          else
-            echo "gradlew not found - generating wrapper"
-            gradle wrapper --gradle-version 8.9
-            ./gradlew assembleDebug --stacktrace --no-daemon
-          fi
+        run: ./gradlew assembleDebug --stacktrace --no-daemon
 
-      - name: Upload Debug APK artifact
+      - name: Upload Debug APK
         uses: actions/upload-artifact@v4
+        if: success()
         with:
           name: PulseChat-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: warn
           retention-days: 14
 
-      - name: List APK location
+      - name: List outputs
         if: always()
-        run: find app/build/outputs -name "*.apk" -type f 2>/dev/null || echo "No APK found yet"
+        run: find app/build/outputs -name "*.apk" -type f 2>/dev/null || echo "No APK produced"
