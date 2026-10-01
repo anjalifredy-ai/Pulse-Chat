@@ -1,0 +1,40 @@
+package com.pulsechat.app.ui.navigation
+
+object Routes {
+    const val SPLASH = "splash"
+    const val ONBOARDING = "onboarding"
+    const val PHONE_AUTH = "phone_auth"
+    const val OTP = "otp/{verificationId}/{phoneNumber}"
+    const val PROFILE_SETUP = "profile_setup"
+    const val HOME = "home"
+    const val CHAT = "chat/{conversationId}"
+    const val NEW_CHAT = "new_chat"
+    const val NEW_GROUP = "new_group"
+    const val GROUP_INFO = "group_info/{conversationId}"
+    const val CONTACT_INFO = "contact_info/{userId}"
+    const val STATUS_VIEWER = "status_viewer/{userId}"
+    const val CREATE_STATUS = "create_status"
+    const val CALL = "call/{callId}"
+    const val INCOMING_CALL = "incoming_call/{callId}"
+    const val SETTINGS = "settings"
+    const val ACCOUNT = "account"
+    const val PRIVACY = "privacy"
+    const val NOTIFICATIONS = "notifications"
+    const val STORAGE = "storage"
+    const val APPEARANCE = "appearance"
+    const val BLOCKED = "blocked"
+    const val MEDIA_VIEWER = "media_viewer/{messageId}"
+    const val CAMERA = "camera"
+    const val SEARCH = "search"
+
+    fun otp(verificationId: String, phoneNumber: String) =
+        "otp/$verificationId/$phoneNumber"
+
+    fun chat(conversationId: String) = "chat/$conversationId"
+    fun groupInfo(conversationId: String) = "group_info/$conversationId"
+    fun contactInfo(userId: String) = "contact_info/$userId"
+    fun statusViewer(userId: String) = "status_viewer/$userId"
+    fun call(callId: String) = "call/$callId"
+    fun incomingCall(callId: String) = "incoming_call/$callId"
+    fun mediaViewer(messageId: String) = "media_viewer/$messageId"
+}
