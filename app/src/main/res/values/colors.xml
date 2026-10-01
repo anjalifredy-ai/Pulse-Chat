@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand -->
+    <color name="pulse_primary">#0A84FF</color>
+    <color name="pulse_primary_dark">#0066CC</color>
+    <color name="pulse_secondary">#30D158</color>
+    <color name="pulse_accent">#FF9F0A</color>
+
+    <!-- Surfaces -->
+    <color name="pulse_background_light">#F2F2F7</color>
+    <color name="pulse_surface_light">#FFFFFF</color>
+    <color name="pulse_background_dark">#000000</color>
+    <color name="pulse_surface_dark">#1C1C1E</color>
+
+    <!-- Text -->
+    <color name="pulse_on_primary">#FFFFFF</color>
+    <color name="pulse_text_primary_light">#000000</color>
+    <color name="pulse_text_secondary_light">#8E8E93</color>
+    <color name="pulse_text_primary_dark">#FFFFFF</color>
+    <color name="pulse_text_secondary_dark">#8E8E93</color>
+
+    <!-- Chat bubbles -->
+    <color name="bubble_outgoing">#0A84FF</color>
+    <color name="bubble_incoming_light">#E5E5EA</color>
+    <color name="bubble_incoming_dark">#2C2C2E</color>
+
+    <!-- Status -->
+    <color name="status_ring">#30D158</color>
+    <color name="status_viewed">#8E8E93</color>
+
+    <!-- Errors / warnings -->
+    <color name="error">#FF453A</color>
+    <color name="warning">#FF9F0A</color>
+
+    <!-- Notification -->
+    <color name="ic_notification_background">#0A84FF</color>
+</resources>
