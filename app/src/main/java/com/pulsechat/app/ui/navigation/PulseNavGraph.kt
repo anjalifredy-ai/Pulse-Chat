@@ -9,19 +9,25 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.pulsechat.app.ui.auth.AuthViewModel
 import com.pulsechat.app.ui.auth.OtpScreen
 import com.pulsechat.app.ui.auth.PhoneAuthScreen
 import com.pulsechat.app.ui.auth.ProfileSetupScreen
 import com.pulsechat.app.ui.auth.SplashScreen
-import com.pulsechat.app.ui.home.HomeScreen
 import com.pulsechat.app.ui.chat.ChatScreen
-import com.pulsechat.app.ui.auth.AuthViewModel
+import com.pulsechat.app.ui.contacts.NewChatScreen
+import com.pulsechat.app.ui.home.HomeScreen
+import com.pulsechat.app.data.repository.ChatRepository
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import androidx.hilt.navigation.compose.hiltViewModel
 
 @Composable
 fun PulseNavGraph() {
     val navController = rememberNavController()
     val authViewModel: AuthViewModel = hiltViewModel()
     val authState by authViewModel.authState.collectAsState()
+    val scope = rememberCoroutineScope()
 
     val startDestination = when {
         authState.isLoading -> Routes.SPLASH
@@ -90,6 +96,26 @@ fun PulseNavGraph() {
                 },
                 onNewChat = { navController.navigate(Routes.NEW_CHAT) },
                 onSettings = { navController.navigate(Routes.SETTINGS) }
+            )
+        }
+
+        composable(Routes.NEW_CHAT) {
+            val chatRepo: ChatRepository = androidx.hilt.navigation.HiltViewModelFactory
+                .let { /* use ViewModel below */ null } ?: return@composable
+            // Use a small ViewModel-free approach via callback
+            NewChatScreen(
+                onBack = { navController.popBackStack() },
+                onUserSelected = { userId ->
+                    // Conversation creation handled in a dedicated small helper screen flow
+                    navController.previousBackStackEntry
+                        ?.savedStateHandle
+                        ?.set("start_chat_user", userId)
+                    navController.popBackStack()
+                },
+                onNewGroup = {
+                    // Group creation UI can be expanded later
+                    navController.popBackStack()
+                }
             )
         }
 
