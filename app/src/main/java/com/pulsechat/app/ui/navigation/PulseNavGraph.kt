@@ -1,8 +1,10 @@
 package com.pulsechat.app.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -14,20 +16,18 @@ import com.pulsechat.app.ui.auth.OtpScreen
 import com.pulsechat.app.ui.auth.PhoneAuthScreen
 import com.pulsechat.app.ui.auth.ProfileSetupScreen
 import com.pulsechat.app.ui.auth.SplashScreen
+import com.pulsechat.app.ui.call.ActiveCallScreen
 import com.pulsechat.app.ui.chat.ChatScreen
 import com.pulsechat.app.ui.contacts.NewChatScreen
+import com.pulsechat.app.ui.contacts.NewChatViewModel
 import com.pulsechat.app.ui.home.HomeScreen
-import com.pulsechat.app.data.repository.ChatRepository
-import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
-import androidx.hilt.navigation.compose.hiltViewModel
 
 @Composable
 fun PulseNavGraph() {
     val navController = rememberNavController()
     val authViewModel: AuthViewModel = hiltViewModel()
     val authState by authViewModel.authState.collectAsState()
-    val scope = rememberCoroutineScope()
 
     val startDestination = when {
         authState.isLoading -> Routes.SPLASH
@@ -95,25 +95,26 @@ fun PulseNavGraph() {
                     navController.navigate(Routes.chat(conversationId))
                 },
                 onNewChat = { navController.navigate(Routes.NEW_CHAT) },
-                onSettings = { navController.navigate(Routes.SETTINGS) }
+                onSettings = { /* settings is a tab */ }
             )
         }
 
         composable(Routes.NEW_CHAT) {
-            val chatRepo: ChatRepository = androidx.hilt.navigation.HiltViewModelFactory
-                .let { /* use ViewModel below */ null } ?: return@composable
-            // Use a small ViewModel-free approach via callback
+            val viewModel: NewChatViewModel = hiltViewModel()
+            val scope = rememberCoroutineScope()
             NewChatScreen(
                 onBack = { navController.popBackStack() },
                 onUserSelected = { userId ->
-                    // Conversation creation handled in a dedicated small helper screen flow
-                    navController.previousBackStackEntry
-                        ?.savedStateHandle
-                        ?.set("start_chat_user", userId)
-                    navController.popBackStack()
+                    scope.launch {
+                        val result = viewModel.startChatWith(userId)
+                        result.onSuccess { convId ->
+                            navController.navigate(Routes.chat(convId)) {
+                                popUpTo(Routes.HOME)
+                            }
+                        }
+                    }
                 },
                 onNewGroup = {
-                    // Group creation UI can be expanded later
                     navController.popBackStack()
                 }
             )
@@ -130,6 +131,17 @@ fun PulseNavGraph() {
                 onOpenContact = { userId ->
                     navController.navigate(Routes.contactInfo(userId))
                 }
+            )
+        }
+
+        composable(
+            route = Routes.CALL,
+            arguments = listOf(navArgument("callId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val callId = backStackEntry.arguments?.getString("callId") ?: ""
+            ActiveCallScreen(
+                callId = callId,
+                onEnd = { navController.popBackStack() }
             )
         }
     }
