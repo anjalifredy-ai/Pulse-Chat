@@ -38,7 +38,7 @@ fun PhoneAuthScreen(
 ) {
     val state by viewModel.authState.collectAsState()
     var phone by remember { mutableStateOf("") }
-    var countryCode by remember { mutableStateOf("+1") }
+    var countryCode by remember { mutableStateOf("+91") }
     val context = LocalContext.current
     val activity = context as? Activity
 
@@ -60,7 +60,7 @@ fun PhoneAuthScreen(
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold
         )
-        Spacer(Modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = stringResource(R.string.welcome_subtitle),
             style = MaterialTheme.typography.bodyMedium,
