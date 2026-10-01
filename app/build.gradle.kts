@@ -37,7 +37,7 @@ android {
         }
         debug {
             isMinifyEnabled = false
-            applicationIdSuffix = ".debug"
+            // No applicationIdSuffix — must match google-services.json package com.pulsechat.app
         }
     }
 
@@ -77,61 +77,48 @@ dependencies {
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.androidx.navigation.compose)
 
-    // Hilt
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
 
-    // Room
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
 
-    // Coroutines
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.play.services)
 
-    // Firebase
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
-    implementation(libs.firebase.storage)
     implementation(libs.firebase.messaging)
     implementation(libs.firebase.functions)
     implementation(libs.firebase.crashlytics)
     implementation(libs.firebase.analytics)
 
-    // Image loading
     implementation(libs.coil.compose)
     implementation(libs.coil.video)
 
-    // Permissions
     implementation(libs.accompanist.permissions)
     implementation(libs.accompanist.systemuicontroller)
 
-    // WebRTC (Stream WebRTC Android)
     implementation(libs.webrtc)
 
-    // DataStore
     implementation(libs.androidx.datastore.preferences)
 
-    // CameraX
     implementation(libs.camerax.core)
     implementation(libs.camerax.camera2)
     implementation(libs.camerax.lifecycle)
     implementation(libs.camerax.view)
 
-    // Media3 (ExoPlayer)
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui)
     implementation(libs.media3.common)
 
-    // Network / utils
     implementation(libs.okhttp)
     implementation(libs.gson)
     implementation(libs.libphonenumber)
 
-    // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
