@@ -8,7 +8,7 @@ import com.google.firebase.auth.PhoneAuthOptions
 import com.google.firebase.auth.PhoneAuthProvider
 import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.storage.FirebaseStorage
+import com.pulsechat.app.data.media.CloudinaryUploader
 import com.pulsechat.app.data.model.PrivacySettings
 import com.pulsechat.app.data.model.User
 import kotlinx.coroutines.tasks.await
@@ -21,7 +21,7 @@ import javax.inject.Singleton
 class AuthRepository @Inject constructor(
     private val auth: FirebaseAuth,
     private val firestore: FirebaseFirestore,
-    private val storage: FirebaseStorage
+    private val cloudinary: CloudinaryUploader
 ) {
     fun currentFirebaseUser() = auth.currentUser
 
@@ -42,9 +42,7 @@ class AuthRepository @Inject constructor(
         onError: (String) -> Unit
     ) {
         val callbacks = object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
-            override fun onVerificationCompleted(credential: PhoneAuthCredential) {
-                // Auto-retrieval / instant verification
-            }
+            override fun onVerificationCompleted(credential: PhoneAuthCredential) {}
 
             override fun onVerificationFailed(e: com.google.firebase.FirebaseException) {
                 onError(e.message ?: "Verification failed")
@@ -106,9 +104,11 @@ class AuthRepository @Inject constructor(
         return try {
             var photoUrl: String? = null
             if (photoUri != null) {
-                val ref = storage.reference.child("profile_photos/${fbUser.uid}.jpg")
-                ref.putFile(photoUri).await()
-                photoUrl = ref.downloadUrl.await().toString()
+                // Free Cloudinary — no Firebase Storage / Blaze
+                val upload = cloudinary.uploadBlocking(photoUri, "profile_photos")
+                photoUrl = upload.getOrElse {
+                    return Result.failure(it)
+                }
             }
 
             val profileUpdates = UserProfileChangeRequest.Builder()

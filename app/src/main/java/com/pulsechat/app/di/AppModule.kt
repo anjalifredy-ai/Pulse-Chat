@@ -4,7 +4,6 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreSettings
 import com.google.firebase.messaging.FirebaseMessaging
-import com.google.firebase.storage.FirebaseStorage
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -29,9 +28,7 @@ object AppModule {
         return db
     }
 
-    @Provides
-    @Singleton
-    fun provideStorage(): FirebaseStorage = FirebaseStorage.getInstance()
+    // Firebase Storage removed — using free Cloudinary instead
 
     @Provides
     @Singleton
