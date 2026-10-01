@@ -13,7 +13,6 @@ import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.asRequestBody
-import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
@@ -21,15 +20,6 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Free-tier friendly media upload via Cloudinary unsigned preset.
- * No API secret in the app — only cloud name + unsigned upload preset.
- *
- * Setup (mobile browser):
- * 1. https://cloudinary.com → free signup
- * 2. Settings → Upload → Add upload preset → Signing mode: Unsigned
- * 3. Put cloud name + preset name in BuildConfig / local defaults below
- */
 @Singleton
 class CloudinaryUploader @Inject constructor(
     @ApplicationContext private val context: Context
@@ -40,13 +30,8 @@ class CloudinaryUploader @Inject constructor(
         .readTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    /**
-     * Replace these after creating your free Cloudinary account.
-     * Or set via BuildConfig fields later.
-     */
     companion object {
-        // TODO: user replaces these two values
-        const val CLOUD_NAME = "YOUR_CLOUD_NAME"
+        const val CLOUD_NAME = "oxmd9sss"
         const val UPLOAD_PRESET = "pulse_chat_unsigned"
     }
 
@@ -68,11 +53,6 @@ class CloudinaryUploader @Inject constructor(
 
     suspend fun uploadBlocking(uri: Uri, folder: String = "pulse_chat"): Result<String> =
         withContext(Dispatchers.IO) {
-            if (CLOUD_NAME == "YOUR_CLOUD_NAME") {
-                return@withContext Result.failure(
-                    Exception("Cloudinary not configured. Set CLOUD_NAME and UPLOAD_PRESET in CloudinaryUploader.")
-                )
-            }
             try {
                 val temp = uriToTempFile(uri)
                 val mediaType = context.contentResolver.getType(uri)?.toMediaTypeOrNull()
@@ -108,9 +88,6 @@ class CloudinaryUploader @Inject constructor(
 
     suspend fun uploadFile(file: File, folder: String = "pulse_chat"): Result<String> =
         withContext(Dispatchers.IO) {
-            if (CLOUD_NAME == "YOUR_CLOUD_NAME") {
-                return@withContext Result.failure(Exception("Cloudinary not configured"))
-            }
             try {
                 val body = MultipartBody.Builder()
                     .setType(MultipartBody.FORM)
