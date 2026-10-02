@@ -43,7 +43,7 @@ class AuthRepository @Inject constructor(
         val webClientId = try {
             context.getString(R.string.default_web_client_id)
         } catch (e: Exception) {
-            "" // fallback — set in google-services.json oauth client
+            ""
         }
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestIdToken(webClientId)
@@ -55,16 +55,29 @@ class AuthRepository @Inject constructor(
 
     suspend fun signInWithGoogle(data: Intent?): Result<User> {
         return try {
+            if (data == null) {
+                return Result.failure(Exception("Google sign-in cancelled"))
+            }
             val task = GoogleSignIn.getSignedInAccountFromIntent(data)
             val account = task.getResult(ApiException::class.java)
             val idToken = account.idToken
-                ?: return Result.failure(Exception("No Google ID token. Check Web client ID in Firebase."))
+                ?: return Result.failure(
+                    Exception("Google setup incomplete. Use Email login for now, or add SHA-1 in Firebase.")
+                )
             val credential = GoogleAuthProvider.getCredential(idToken, null)
             val result = auth.signInWithCredential(credential).await()
             val fbUser = result.user ?: return Result.failure(Exception("No user"))
             Result.success(ensureUserDoc(fbUser.uid, fbUser.email, fbUser.displayName, fbUser.photoUrl?.toString()))
+        } catch (e: ApiException) {
+            val msg = when (e.statusCode) {
+                10 -> "Google Error 10: Add app SHA-1 in Firebase Project Settings. Meanwhile use Email login."
+                12501 -> "Google sign-in cancelled"
+                7 -> "Network error. Check internet."
+                else -> "Google sign-in failed (code ${e.statusCode}). Try Email login."
+            }
+            Result.failure(Exception(msg))
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(Exception(e.message ?: "Google sign-in failed. Try Email login."))
         }
     }
 
@@ -74,7 +87,7 @@ class AuthRepository @Inject constructor(
             val fbUser = result.user ?: return Result.failure(Exception("No user"))
             Result.success(ensureUserDoc(fbUser.uid, fbUser.email, fbUser.displayName, fbUser.photoUrl?.toString()))
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(Exception(friendlyAuthError(e)))
         }
     }
 
@@ -96,7 +109,19 @@ class AuthRepository @Inject constructor(
                 )
             )
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(Exception(friendlyAuthError(e)))
+        }
+    }
+
+    private fun friendlyAuthError(e: Exception): String {
+        val m = e.message.orEmpty()
+        return when {
+            m.contains("PASSWORD", ignoreCase = true) -> "Password must be at least 6 characters"
+            m.contains("EMAIL", ignoreCase = true) && m.contains("EXIST", ignoreCase = true) ->
+                "Account already exists. Tap Sign in below."
+            m.contains("INVALID", ignoreCase = true) -> "Wrong email or password"
+            m.contains("NETWORK", ignoreCase = true) -> "Network error. Check internet."
+            else -> m.ifBlank { "Login failed" }
         }
     }
 
