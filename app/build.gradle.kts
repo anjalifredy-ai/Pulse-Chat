@@ -16,8 +16,8 @@ android {
         applicationId = "com.pulsechat.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -37,7 +37,6 @@ android {
         }
         debug {
             isMinifyEnabled = false
-            // No applicationIdSuffix — must match google-services.json package com.pulsechat.app
         }
     }
 
@@ -95,6 +94,9 @@ dependencies {
     implementation(libs.firebase.functions)
     implementation(libs.firebase.crashlytics)
     implementation(libs.firebase.analytics)
+
+    // Google Sign-In
+    implementation("com.google.android.gms:play-services-auth:21.2.0")
 
     implementation(libs.coil.compose)
     implementation(libs.coil.video)

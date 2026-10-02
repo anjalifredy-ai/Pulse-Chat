@@ -1,5 +1,6 @@
 package com.pulsechat.app.ui.auth
 
+import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pulsechat.app.data.repository.AuthRepository
@@ -15,11 +16,7 @@ data class AuthUiState(
     val isLoading: Boolean = true,
     val isAuthenticated: Boolean = false,
     val hasProfile: Boolean = false,
-    val phoneNumber: String = "",
-    val verificationId: String? = null,
-    val error: String? = null,
-    val otpSent: Boolean = false,
-    val resendSeconds: Int = 0
+    val error: String? = null
 )
 
 @HiltViewModel
@@ -47,38 +44,12 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    fun sendOtp(phoneNumber: String, activity: android.app.Activity) {
-        viewModelScope.launch {
-            _authState.update { it.copy(isLoading = true, error = null) }
-            authRepository.sendOtp(
-                phoneNumber = phoneNumber,
-                activity = activity,
-                onCodeSent = { verificationId ->
-                    _authState.update {
-                        it.copy(
-                            isLoading = false,
-                            otpSent = true,
-                            verificationId = verificationId,
-                            phoneNumber = phoneNumber,
-                            resendSeconds = 60
-                        )
-                    }
-                    startResendTimer()
-                },
-                onError = { message ->
-                    _authState.update {
-                        it.copy(isLoading = false, error = message)
-                    }
-                }
-            )
-        }
-    }
+    fun getGoogleSignInIntent(): Intent = authRepository.getGoogleSignInIntent()
 
-    fun verifyOtp(code: String) {
-        val verificationId = _authState.value.verificationId ?: return
+    fun handleGoogleResult(data: Intent?) {
         viewModelScope.launch {
             _authState.update { it.copy(isLoading = true, error = null) }
-            val result = authRepository.verifyOtp(verificationId, code)
+            val result = authRepository.signInWithGoogle(data)
             result.fold(
                 onSuccess = { user ->
                     _authState.update {
@@ -91,7 +62,53 @@ class AuthViewModel @Inject constructor(
                 },
                 onFailure = { e ->
                     _authState.update {
-                        it.copy(isLoading = false, error = e.message ?: "Invalid code")
+                        it.copy(isLoading = false, error = e.message ?: "Google sign-in failed")
+                    }
+                }
+            )
+        }
+    }
+
+    fun signInEmail(email: String, password: String) {
+        viewModelScope.launch {
+            _authState.update { it.copy(isLoading = true, error = null) }
+            val result = authRepository.signInWithEmail(email, password)
+            result.fold(
+                onSuccess = { user ->
+                    _authState.update {
+                        it.copy(
+                            isLoading = false,
+                            isAuthenticated = true,
+                            hasProfile = user.displayName.isNotBlank()
+                        )
+                    }
+                },
+                onFailure = { e ->
+                    _authState.update {
+                        it.copy(isLoading = false, error = e.message ?: "Login failed")
+                    }
+                }
+            )
+        }
+    }
+
+    fun registerEmail(email: String, password: String, displayName: String) {
+        viewModelScope.launch {
+            _authState.update { it.copy(isLoading = true, error = null) }
+            val result = authRepository.registerWithEmail(email, password, displayName)
+            result.fold(
+                onSuccess = { user ->
+                    _authState.update {
+                        it.copy(
+                            isLoading = false,
+                            isAuthenticated = true,
+                            hasProfile = user.displayName.isNotBlank()
+                        )
+                    }
+                },
+                onFailure = { e ->
+                    _authState.update {
+                        it.copy(isLoading = false, error = e.message ?: "Registration failed")
                     }
                 }
             )
@@ -104,14 +121,10 @@ class AuthViewModel @Inject constructor(
             val result = authRepository.updateProfile(displayName, about, photoUri)
             result.fold(
                 onSuccess = {
-                    _authState.update {
-                        it.copy(isLoading = false, hasProfile = true)
-                    }
+                    _authState.update { it.copy(isLoading = false, hasProfile = true) }
                 },
                 onFailure = { e ->
-                    _authState.update {
-                        it.copy(isLoading = false, error = e.message)
-                    }
+                    _authState.update { it.copy(isLoading = false, error = e.message) }
                 }
             )
         }
@@ -119,15 +132,6 @@ class AuthViewModel @Inject constructor(
 
     fun clearError() {
         _authState.update { it.copy(error = null) }
-    }
-
-    private fun startResendTimer() {
-        viewModelScope.launch {
-            while (_authState.value.resendSeconds > 0) {
-                kotlinx.coroutines.delay(1000)
-                _authState.update { it.copy(resendSeconds = it.resendSeconds - 1) }
-            }
-        }
     }
 
     fun logout() {

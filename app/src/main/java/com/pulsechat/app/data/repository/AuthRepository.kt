@@ -1,19 +1,22 @@
 package com.pulsechat.app.data.repository
 
-import android.app.Activity
+import android.content.Context
+import android.content.Intent
 import android.net.Uri
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.PhoneAuthCredential
-import com.google.firebase.auth.PhoneAuthOptions
-import com.google.firebase.auth.PhoneAuthProvider
+import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
+import com.pulsechat.app.R
 import com.pulsechat.app.data.media.CloudinaryUploader
 import com.pulsechat.app.data.model.PrivacySettings
 import com.pulsechat.app.data.model.User
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.tasks.await
 import java.util.Date
-import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -21,7 +24,8 @@ import javax.inject.Singleton
 class AuthRepository @Inject constructor(
     private val auth: FirebaseAuth,
     private val firestore: FirebaseFirestore,
-    private val cloudinary: CloudinaryUploader
+    private val cloudinary: CloudinaryUploader,
+    @ApplicationContext private val context: Context
 ) {
     fun currentFirebaseUser() = auth.currentUser
 
@@ -35,64 +39,90 @@ class AuthRepository @Inject constructor(
         }
     }
 
-    fun sendOtp(
-        phoneNumber: String,
-        activity: Activity,
-        onCodeSent: (String) -> Unit,
-        onError: (String) -> Unit
-    ) {
-        val callbacks = object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
-            override fun onVerificationCompleted(credential: PhoneAuthCredential) {}
-
-            override fun onVerificationFailed(e: com.google.firebase.FirebaseException) {
-                onError(e.message ?: "Verification failed")
-            }
-
-            override fun onCodeSent(
-                verificationId: String,
-                token: PhoneAuthProvider.ForceResendingToken
-            ) {
-                onCodeSent(verificationId)
-            }
+    fun getGoogleSignInIntent(): Intent {
+        val webClientId = try {
+            context.getString(R.string.default_web_client_id)
+        } catch (e: Exception) {
+            "" // fallback — set in google-services.json oauth client
         }
-
-        val options = PhoneAuthOptions.newBuilder(auth)
-            .setPhoneNumber(phoneNumber)
-            .setTimeout(60L, TimeUnit.SECONDS)
-            .setActivity(activity)
-            .setCallbacks(callbacks)
+        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestIdToken(webClientId)
+            .requestEmail()
+            .requestProfile()
             .build()
-
-        PhoneAuthProvider.verifyPhoneNumber(options)
+        return GoogleSignIn.getClient(context, gso).signInIntent
     }
 
-    suspend fun verifyOtp(verificationId: String, code: String): Result<User> {
+    suspend fun signInWithGoogle(data: Intent?): Result<User> {
         return try {
-            val credential = PhoneAuthProvider.getCredential(verificationId, code)
+            val task = GoogleSignIn.getSignedInAccountFromIntent(data)
+            val account = task.getResult(ApiException::class.java)
+            val idToken = account.idToken
+                ?: return Result.failure(Exception("No Google ID token. Check Web client ID in Firebase."))
+            val credential = GoogleAuthProvider.getCredential(idToken, null)
             val result = auth.signInWithCredential(credential).await()
             val fbUser = result.user ?: return Result.failure(Exception("No user"))
-
-            val userRef = firestore.collection("users").document(fbUser.uid)
-            val existing = userRef.get().await()
-            val user = if (existing.exists()) {
-                existing.toObject(User::class.java) ?: User(uid = fbUser.uid)
-            } else {
-                val newUser = User(
-                    uid = fbUser.uid,
-                    phoneNumber = fbUser.phoneNumber ?: "",
-                    displayName = "",
-                    about = "Hey there! I am using Pulse Chat.",
-                    createdAt = Date(),
-                    updatedAt = Date(),
-                    privacy = PrivacySettings()
-                )
-                userRef.set(newUser).await()
-                newUser
-            }
-            Result.success(user)
+            Result.success(ensureUserDoc(fbUser.uid, fbUser.email, fbUser.displayName, fbUser.photoUrl?.toString()))
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    suspend fun signInWithEmail(email: String, password: String): Result<User> {
+        return try {
+            val result = auth.signInWithEmailAndPassword(email.trim(), password).await()
+            val fbUser = result.user ?: return Result.failure(Exception("No user"))
+            Result.success(ensureUserDoc(fbUser.uid, fbUser.email, fbUser.displayName, fbUser.photoUrl?.toString()))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun registerWithEmail(email: String, password: String, displayName: String): Result<User> {
+        return try {
+            val result = auth.createUserWithEmailAndPassword(email.trim(), password).await()
+            val fbUser = result.user ?: return Result.failure(Exception("No user"))
+            if (displayName.isNotBlank()) {
+                fbUser.updateProfile(
+                    UserProfileChangeRequest.Builder().setDisplayName(displayName.trim()).build()
+                ).await()
+            }
+            Result.success(
+                ensureUserDoc(
+                    fbUser.uid,
+                    fbUser.email,
+                    displayName.ifBlank { fbUser.displayName },
+                    null
+                )
+            )
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    private suspend fun ensureUserDoc(
+        uid: String,
+        email: String?,
+        displayName: String?,
+        photoUrl: String?
+    ): User {
+        val userRef = firestore.collection("users").document(uid)
+        val existing = userRef.get().await()
+        if (existing.exists()) {
+            return existing.toObject(User::class.java) ?: User(uid = uid)
+        }
+        val newUser = User(
+            uid = uid,
+            phoneNumber = email ?: "",
+            displayName = displayName.orEmpty(),
+            about = "Hey there! I am using Pulse Chat.",
+            photoUrl = photoUrl,
+            createdAt = Date(),
+            updatedAt = Date(),
+            privacy = PrivacySettings()
+        )
+        userRef.set(newUser).await()
+        return newUser
     }
 
     suspend fun updateProfile(
@@ -104,11 +134,8 @@ class AuthRepository @Inject constructor(
         return try {
             var photoUrl: String? = null
             if (photoUri != null) {
-                // Free Cloudinary — no Firebase Storage / Blaze
                 val upload = cloudinary.uploadBlocking(photoUri, "profile_photos")
-                photoUrl = upload.getOrElse {
-                    return Result.failure(it)
-                }
+                photoUrl = upload.getOrElse { return Result.failure(it) }
             }
 
             val profileUpdates = UserProfileChangeRequest.Builder()
@@ -124,10 +151,7 @@ class AuthRepository @Inject constructor(
             )
             if (photoUrl != null) updates["photoUrl"] = photoUrl
 
-            firestore.collection("users").document(fbUser.uid)
-                .update(updates)
-                .await()
-
+            firestore.collection("users").document(fbUser.uid).update(updates).await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -135,6 +159,12 @@ class AuthRepository @Inject constructor(
     }
 
     suspend fun logout() {
+        try {
+            GoogleSignIn.getClient(
+                context,
+                GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN).build()
+            ).signOut()
+        } catch (_: Exception) { }
         auth.signOut()
     }
 

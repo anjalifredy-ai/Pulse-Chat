@@ -2,9 +2,8 @@ package com.pulsechat.app.ui.navigation
 
 object Routes {
     const val SPLASH = "splash"
-    const val ONBOARDING = "onboarding"
-    const val PHONE_AUTH = "phone_auth"
-    const val OTP = "otp/{verificationId}/{phoneNumber}"
+    const val LOGIN = "login"
+    const val PHONE_AUTH = "login" // alias for old references
     const val PROFILE_SETUP = "profile_setup"
     const val HOME = "home"
     const val CHAT = "chat/{conversationId}"
@@ -26,9 +25,6 @@ object Routes {
     const val MEDIA_VIEWER = "media_viewer/{messageId}"
     const val CAMERA = "camera"
     const val SEARCH = "search"
-
-    fun otp(verificationId: String, phoneNumber: String) =
-        "otp/$verificationId/$phoneNumber"
 
     fun chat(conversationId: String) = "chat/$conversationId"
     fun groupInfo(conversationId: String) = "group_info/$conversationId"

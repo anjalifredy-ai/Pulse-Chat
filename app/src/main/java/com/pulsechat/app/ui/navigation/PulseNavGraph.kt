@@ -1,7 +1,6 @@
 package com.pulsechat.app.ui.navigation
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -12,8 +11,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.pulsechat.app.ui.auth.AuthViewModel
-import com.pulsechat.app.ui.auth.OtpScreen
-import com.pulsechat.app.ui.auth.PhoneAuthScreen
+import com.pulsechat.app.ui.auth.LoginScreen
 import com.pulsechat.app.ui.auth.ProfileSetupScreen
 import com.pulsechat.app.ui.auth.SplashScreen
 import com.pulsechat.app.ui.call.ActiveCallScreen
@@ -33,7 +31,7 @@ fun PulseNavGraph() {
         authState.isLoading -> Routes.SPLASH
         authState.isAuthenticated && authState.hasProfile -> Routes.HOME
         authState.isAuthenticated && !authState.hasProfile -> Routes.PROFILE_SETUP
-        else -> Routes.PHONE_AUTH
+        else -> Routes.LOGIN
     }
 
     NavHost(
@@ -50,32 +48,14 @@ fun PulseNavGraph() {
             )
         }
 
-        composable(Routes.PHONE_AUTH) {
-            PhoneAuthScreen(
-                onCodeSent = { verificationId, phone ->
-                    navController.navigate(Routes.otp(verificationId, phone))
-                }
-            )
-        }
-
-        composable(
-            route = Routes.OTP,
-            arguments = listOf(
-                navArgument("verificationId") { type = NavType.StringType },
-                navArgument("phoneNumber") { type = NavType.StringType }
-            )
-        ) { backStackEntry ->
-            val verificationId = backStackEntry.arguments?.getString("verificationId") ?: ""
-            val phoneNumber = backStackEntry.arguments?.getString("phoneNumber") ?: ""
-            OtpScreen(
-                verificationId = verificationId,
-                phoneNumber = phoneNumber,
-                onVerified = {
-                    navController.navigate(Routes.PROFILE_SETUP) {
-                        popUpTo(Routes.PHONE_AUTH) { inclusive = true }
+        composable(Routes.LOGIN) {
+            LoginScreen(
+                onAuthenticated = { hasProfile ->
+                    val dest = if (hasProfile) Routes.HOME else Routes.PROFILE_SETUP
+                    navController.navigate(dest) {
+                        popUpTo(Routes.LOGIN) { inclusive = true }
                     }
-                },
-                onBack = { navController.popBackStack() }
+                }
             )
         }
 
@@ -95,7 +75,7 @@ fun PulseNavGraph() {
                     navController.navigate(Routes.chat(conversationId))
                 },
                 onNewChat = { navController.navigate(Routes.NEW_CHAT) },
-                onSettings = { /* settings is a tab */ }
+                onSettings = { }
             )
         }
 
@@ -114,9 +94,7 @@ fun PulseNavGraph() {
                         }
                     }
                 },
-                onNewGroup = {
-                    navController.popBackStack()
-                }
+                onNewGroup = { navController.popBackStack() }
             )
         }
 
