@@ -23,15 +23,7 @@ class NewChatViewModel @Inject constructor(
 
     fun loadContacts() {
         viewModelScope.launch {
-            val device = contactRepository.loadDeviceContacts()
-            val matched = contactRepository.discoverUsers(device)
-            _users.value = matched
-        }
-    }
-
-    fun search(query: String) {
-        viewModelScope.launch {
-            _users.value = contactRepository.searchUsers(query)
+            _users.value = contactRepository.getAllUsers()
         }
     }
 

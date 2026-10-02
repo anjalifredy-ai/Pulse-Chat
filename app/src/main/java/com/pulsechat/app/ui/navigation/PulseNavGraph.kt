@@ -1,6 +1,7 @@
 package com.pulsechat.app.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -18,6 +19,7 @@ import com.pulsechat.app.ui.call.ActiveCallScreen
 import com.pulsechat.app.ui.chat.ChatScreen
 import com.pulsechat.app.ui.contacts.NewChatScreen
 import com.pulsechat.app.ui.contacts.NewChatViewModel
+import com.pulsechat.app.ui.groups.CreateGroupScreen
 import com.pulsechat.app.ui.home.HomeScreen
 import kotlinx.coroutines.launch
 
@@ -26,6 +28,18 @@ fun PulseNavGraph() {
     val navController = rememberNavController()
     val authViewModel: AuthViewModel = hiltViewModel()
     val authState by authViewModel.authState.collectAsState()
+
+    // Keep session: if logged out while on home, go to login
+    LaunchedEffect(authState.isAuthenticated, authState.isLoading) {
+        if (!authState.isLoading && !authState.isAuthenticated) {
+            val current = navController.currentDestination?.route
+            if (current != Routes.LOGIN && current != Routes.SPLASH) {
+                navController.navigate(Routes.LOGIN) {
+                    popUpTo(0) { inclusive = true }
+                }
+            }
+        }
+    }
 
     val startDestination = when {
         authState.isLoading -> Routes.SPLASH
@@ -94,7 +108,18 @@ fun PulseNavGraph() {
                         }
                     }
                 },
-                onNewGroup = { navController.popBackStack() }
+                onNewGroup = { navController.navigate(Routes.NEW_GROUP) }
+            )
+        }
+
+        composable(Routes.NEW_GROUP) {
+            CreateGroupScreen(
+                onBack = { navController.popBackStack() },
+                onCreated = { convId ->
+                    navController.navigate(Routes.chat(convId)) {
+                        popUpTo(Routes.HOME)
+                    }
+                }
             )
         }
 
@@ -106,9 +131,7 @@ fun PulseNavGraph() {
             ChatScreen(
                 conversationId = conversationId,
                 onBack = { navController.popBackStack() },
-                onOpenContact = { userId ->
-                    navController.navigate(Routes.contactInfo(userId))
-                }
+                onOpenContact = { }
             )
         }
 

@@ -3,7 +3,7 @@ package com.pulsechat.app.ui.navigation
 object Routes {
     const val SPLASH = "splash"
     const val LOGIN = "login"
-    const val PHONE_AUTH = "login" // alias for old references
+    const val PHONE_AUTH = "login"
     const val PROFILE_SETUP = "profile_setup"
     const val HOME = "home"
     const val CHAT = "chat/{conversationId}"

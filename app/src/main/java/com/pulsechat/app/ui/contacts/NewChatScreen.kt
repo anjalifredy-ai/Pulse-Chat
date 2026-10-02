@@ -7,11 +7,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.GroupAdd
@@ -28,12 +26,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.AsyncImage
 import com.pulsechat.app.data.model.User
+import com.pulsechat.app.ui.components.CircleAvatar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -74,6 +70,14 @@ fun NewChatScreen(
                 Text("New group", style = MaterialTheme.typography.titleMedium)
             }
 
+            if (users.isEmpty()) {
+                Text(
+                    "No other users yet. Ask a friend to register on Pulse Chat.",
+                    modifier = Modifier.padding(16.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
             LazyColumn {
                 items(users, key = { it.uid }) { user ->
                     UserRow(user = user, onClick = { onUserSelected(user.uid) })
@@ -85,6 +89,7 @@ fun NewChatScreen(
 
 @Composable
 private fun UserRow(user: User, onClick: () -> Unit) {
+    val name = user.displayName.ifBlank { user.phoneNumber.ifBlank { "User" } }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -92,16 +97,15 @@ private fun UserRow(user: User, onClick: () -> Unit) {
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        AsyncImage(
-            model = user.photoUrl,
-            contentDescription = null,
-            modifier = Modifier.size(48.dp).clip(CircleShape),
-            contentScale = ContentScale.Crop
-        )
+        CircleAvatar(photoUrl = user.photoUrl, name = name)
         Spacer(modifier = Modifier.width(12.dp))
         Column {
-            Text(user.displayName.ifBlank { user.phoneNumber }, style = MaterialTheme.typography.titleMedium)
-            Text(user.about, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(name, style = MaterialTheme.typography.titleMedium)
+            Text(
+                user.about,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
