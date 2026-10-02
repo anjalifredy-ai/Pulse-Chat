@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.GroupAdd
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -28,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.google.firebase.auth.FirebaseAuth
 import com.pulsechat.app.data.model.User
 import com.pulsechat.app.ui.components.CircleAvatar
 
@@ -37,9 +39,11 @@ fun NewChatScreen(
     onBack: () -> Unit,
     onUserSelected: (String) -> Unit,
     onNewGroup: () -> Unit,
+    onMessageYourself: () -> Unit = {},
     viewModel: NewChatViewModel = hiltViewModel()
 ) {
     val users by viewModel.users.collectAsState()
+    val me = FirebaseAuth.getInstance().currentUser
 
     LaunchedEffect(Unit) {
         viewModel.loadContacts()
@@ -58,6 +62,30 @@ fun NewChatScreen(
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+            // Message yourself
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onMessageYourself)
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CircleAvatar(
+                    photoUrl = me?.photoUrl?.toString(),
+                    name = me?.displayName ?: "You",
+                    size = 48.dp
+                )
+                Spacer(modifier = Modifier.width(16.dp))
+                Column {
+                    Text("Message yourself", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Notes, links, reminders",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -65,14 +93,18 @@ fun NewChatScreen(
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.GroupAdd, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Icon(
+                    Icons.Default.GroupAdd,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
                 Spacer(modifier = Modifier.width(16.dp))
                 Text("New group", style = MaterialTheme.typography.titleMedium)
             }
 
             if (users.isEmpty()) {
                 Text(
-                    "No other users yet. Ask a friend to register on Pulse Chat.",
+                    "No other users yet. Ask a friend to register on Pulse Chat with another email.",
                     modifier = Modifier.padding(16.dp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
