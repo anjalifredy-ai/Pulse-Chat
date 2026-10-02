@@ -10,6 +10,7 @@ import com.pulsechat.app.data.model.LastMessage
 import com.pulsechat.app.data.model.Message
 import com.pulsechat.app.data.model.MessageStatus
 import com.pulsechat.app.data.model.MessageType
+import com.pulsechat.app.data.model.ParticipantInfo
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -34,9 +35,9 @@ class ChatRepository @Inject constructor(
             return@callbackFlow
         }
 
+        // No orderBy to avoid composite-index requirement; sort client-side
         val listener = firestore.collection("conversations")
             .whereArrayContains("participants", currentUid)
-            .orderBy("updatedAt", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     trySend(emptyList())
@@ -44,7 +45,7 @@ class ChatRepository @Inject constructor(
                 }
                 val list = snapshot?.documents?.mapNotNull {
                     it.toObject(Conversation::class.java)?.copy(id = it.id)
-                } ?: emptyList()
+                }?.sortedByDescending { it.updatedAt?.time ?: 0L } ?: emptyList()
                 trySend(list)
             }
 
@@ -56,7 +57,7 @@ class ChatRepository @Inject constructor(
             .document(conversationId)
             .collection("messages")
             .orderBy("createdAt", Query.Direction.ASCENDING)
-            .limitToLast(100)
+            .limitToLast(200)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     trySend(emptyList())
@@ -143,10 +144,10 @@ class ChatRepository @Inject constructor(
             ref.set(message).await()
 
             val preview = caption ?: when (type) {
-                MessageType.IMAGE -> "🖼️ Photo"
-                MessageType.VIDEO -> "🎬 Video"
-                MessageType.VOICE, MessageType.AUDIO -> "🎤 Voice message"
-                MessageType.DOCUMENT -> "📄 ${fileName ?: "Document"}"
+                MessageType.IMAGE -> "Photo"
+                MessageType.VIDEO -> "Video"
+                MessageType.VOICE, MessageType.AUDIO -> "Voice message"
+                MessageType.DOCUMENT -> fileName ?: "Document"
                 else -> "Media"
             }
             firestore.collection("conversations").document(conversationId)
@@ -169,6 +170,19 @@ class ChatRepository @Inject constructor(
         }
     }
 
+    private suspend fun loadParticipantInfo(userId: String): ParticipantInfo {
+        return try {
+            val snap = firestore.collection("users").document(userId).get().await()
+            ParticipantInfo(
+                displayName = snap.getString("displayName") ?: "",
+                photoUrl = snap.getString("photoUrl"),
+                phoneNumber = snap.getString("phoneNumber") ?: ""
+            )
+        } catch (_: Exception) {
+            ParticipantInfo()
+        }
+    }
+
     suspend fun createDirectConversation(otherUserId: String): Result<String> {
         val currentUid = uid ?: return Result.failure(Exception("Not authenticated"))
         return try {
@@ -182,11 +196,14 @@ class ChatRepository @Inject constructor(
                 }
             if (existing != null) return Result.success(existing.id)
 
+            val me = loadParticipantInfo(currentUid)
+            val other = loadParticipantInfo(otherUserId)
             val ref = firestore.collection("conversations").document()
             val conv = Conversation(
                 id = ref.id,
                 type = ConversationType.DIRECT,
                 participants = listOf(currentUid, otherUserId),
+                participantDetails = mapOf(currentUid to me, otherUserId to other),
                 createdAt = Date(),
                 updatedAt = Date()
             )

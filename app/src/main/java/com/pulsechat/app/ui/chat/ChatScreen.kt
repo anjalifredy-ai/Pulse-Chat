@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,6 +18,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -39,10 +40,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.pulsechat.app.data.model.Message
+import com.pulsechat.app.ui.components.CircleAvatar
 import com.pulsechat.app.ui.theme.BubbleOutgoing
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,6 +56,8 @@ fun ChatScreen(
     conversationId: String,
     onBack: () -> Unit,
     onOpenContact: (String) -> Unit,
+    onVoiceCall: (String) -> Unit = {},
+    onVideoCall: (String) -> Unit = {},
     viewModel: ChatViewModel = hiltViewModel()
 ) {
     LaunchedEffect(conversationId) {
@@ -58,6 +66,9 @@ fun ChatScreen(
 
     val messages by viewModel.messages.collectAsState()
     val currentUid by viewModel.currentUid.collectAsState()
+    val title by viewModel.title.collectAsState()
+    val photoUrl by viewModel.photoUrl.collectAsState()
+    val wallpaper by viewModel.wallpaperColor.collectAsState()
     var input by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
 
@@ -70,10 +81,27 @@ fun ChatScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Chat") },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircleAvatar(photoUrl = photoUrl, name = title, size = 36.dp)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(title, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                            Text("tap for info", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { onVideoCall(conversationId) }) {
+                        Icon(Icons.Default.Videocam, contentDescription = "Video call")
+                    }
+                    IconButton(onClick = { onVoiceCall(conversationId) }) {
+                        Icon(Icons.Default.Call, contentDescription = "Voice call")
                     }
                 }
             )
@@ -82,6 +110,7 @@ fun ChatScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface)
                     .padding(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -116,19 +145,25 @@ fun ChatScreen(
             }
         }
     ) { padding ->
-        LazyColumn(
-            state = listState,
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+                .background(wallpaper)
         ) {
-            items(messages, key = { it.id }) { message ->
-                MessageBubble(
-                    message = message,
-                    isMine = message.senderId == currentUid
-                )
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(messages, key = { it.id }) { message ->
+                    MessageBubble(
+                        message = message,
+                        isMine = message.senderId == currentUid
+                    )
+                }
             }
         }
     }
@@ -141,12 +176,15 @@ private fun MessageBubble(
 ) {
     val bg = if (isMine) BubbleOutgoing else MaterialTheme.colorScheme.surfaceVariant
     val textColor = if (isMine) Color.White else MaterialTheme.colorScheme.onSurface
+    val time = message.createdAt?.let {
+        SimpleDateFormat("HH:mm", Locale.getDefault()).format(it)
+    } ?: ""
 
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (isMine) Arrangement.End else Arrangement.Start
     ) {
-        Box(
+        Column(
             modifier = Modifier
                 .widthIn(max = 280.dp)
                 .clip(
@@ -161,10 +199,21 @@ private fun MessageBubble(
                 .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
             Text(
-                text = message.text ?: "",
+                text = when {
+                    message.deletedForEveryone -> "This message was deleted"
+                    else -> message.text.orEmpty()
+                },
                 color = textColor,
                 style = MaterialTheme.typography.bodyLarge
             )
+            if (time.isNotBlank()) {
+                Text(
+                    text = time,
+                    color = textColor.copy(alpha = 0.7f),
+                    fontSize = 11.sp,
+                    modifier = Modifier.align(Alignment.End)
+                )
+            }
         }
     }
 }
