@@ -16,6 +16,7 @@ import com.pulsechat.app.ui.auth.LoginScreen
 import com.pulsechat.app.ui.auth.ProfileSetupScreen
 import com.pulsechat.app.ui.auth.SplashScreen
 import com.pulsechat.app.ui.call.ActiveCallScreen
+import com.pulsechat.app.ui.call.OutgoingCallScreen
 import com.pulsechat.app.ui.chat.ChatScreen
 import com.pulsechat.app.ui.contacts.NewChatScreen
 import com.pulsechat.app.ui.contacts.NewChatViewModel
@@ -29,7 +30,6 @@ fun PulseNavGraph() {
     val authViewModel: AuthViewModel = hiltViewModel()
     val authState by authViewModel.authState.collectAsState()
 
-    // Keep session: if logged out while on home, go to login
     LaunchedEffect(authState.isAuthenticated, authState.isLoading) {
         if (!authState.isLoading && !authState.isAuthenticated) {
             val current = navController.currentDestination?.route
@@ -131,7 +131,29 @@ fun PulseNavGraph() {
             ChatScreen(
                 conversationId = conversationId,
                 onBack = { navController.popBackStack() },
-                onOpenContact = { }
+                onOpenContact = { },
+                onVoiceCall = {
+                    navController.navigate("outgoing_call/voice/$conversationId")
+                },
+                onVideoCall = {
+                    navController.navigate("outgoing_call/video/$conversationId")
+                }
+            )
+        }
+
+        composable(
+            route = "outgoing_call/{type}/{conversationId}",
+            arguments = listOf(
+                navArgument("type") { type = NavType.StringType },
+                navArgument("conversationId") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val type = backStackEntry.arguments?.getString("type") ?: "voice"
+            OutgoingCallScreen(
+                name = "Pulse Contact",
+                photoUrl = null,
+                isVideo = type == "video",
+                onEnd = { navController.popBackStack() }
             )
         }
 
