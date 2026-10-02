@@ -108,7 +108,17 @@ fun PulseNavGraph() {
                         }
                     }
                 },
-                onNewGroup = { navController.navigate(Routes.NEW_GROUP) }
+                onNewGroup = { navController.navigate(Routes.NEW_GROUP) },
+                onMessageYourself = {
+                    scope.launch {
+                        val result = viewModel.startSelfChat()
+                        result.onSuccess { convId ->
+                            navController.navigate(Routes.chat(convId)) {
+                                popUpTo(Routes.HOME)
+                            }
+                        }
+                    }
+                }
             )
         }
 
@@ -150,8 +160,8 @@ fun PulseNavGraph() {
         ) { backStackEntry ->
             val type = backStackEntry.arguments?.getString("type") ?: "voice"
             OutgoingCallScreen(
-                name = "Pulse Contact",
-                photoUrl = null,
+                name = authState.displayName.ifBlank { "Pulse Contact" },
+                photoUrl = authState.photoUrl,
                 isVideo = type == "video",
                 onEnd = { navController.popBackStack() }
             )
