@@ -50,6 +50,7 @@ class ChatRepository @Inject constructor(
     }
 
     fun observeMessages(conversationId: String): Flow<List<Message>> = callbackFlow {
+        val currentUid = uid
         val listener = firestore.collection("conversations")
             .document(conversationId)
             .collection("messages")
@@ -62,6 +63,9 @@ class ChatRepository @Inject constructor(
                 }
                 val list = snapshot?.documents?.mapNotNull {
                     it.toObject(Message::class.java)?.copy(id = it.id)
+                }?.filter { msg ->
+                    // Hide messages deleted for me
+                    currentUid == null || currentUid !in msg.deletedFor
                 } ?: emptyList()
                 trySend(list)
             }
@@ -241,7 +245,6 @@ class ChatRepository @Inject constructor(
         }
     }
 
-    /** Blue ticks: mark others' messages as READ when chat is open */
     suspend fun markMessagesRead(conversationId: String): Result<Unit> {
         val currentUid = uid ?: return Result.failure(Exception("Not authenticated"))
         return try {
@@ -281,6 +284,7 @@ class ChatRepository @Inject constructor(
         return markMessagesRead(conversationId)
     }
 
+    /** Delete only for current user — message hidden for them */
     suspend fun deleteMessageForMe(conversationId: String, messageId: String): Result<Unit> {
         val currentUid = uid ?: return Result.failure(Exception("Not authenticated"))
         return try {
@@ -288,6 +292,31 @@ class ChatRepository @Inject constructor(
                 .collection("messages").document(messageId)
                 .update("deletedFor", FieldValue.arrayUnion(currentUid))
                 .await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /** Delete for everyone — only sender can do this */
+    suspend fun deleteMessageForEveryone(conversationId: String, messageId: String): Result<Unit> {
+        val currentUid = uid ?: return Result.failure(Exception("Not authenticated"))
+        return try {
+            val ref = firestore.collection("conversations").document(conversationId)
+                .collection("messages").document(messageId)
+            val snap = ref.get().await()
+            val msg = snap.toObject(Message::class.java)
+            if (msg?.senderId != currentUid) {
+                return Result.failure(Exception("Only sender can delete for everyone"))
+            }
+            ref.update(
+                mapOf(
+                    "deletedForEveryone" to true,
+                    "text" to "This message was deleted",
+                    "mediaUrl" to null,
+                    "type" to MessageType.TEXT.name
+                )
+            ).await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)

@@ -163,6 +163,20 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    fun deleteForMe(messageId: String) {
+        val id = conversationId.value ?: return
+        viewModelScope.launch {
+            chatRepository.deleteMessageForMe(id, messageId)
+        }
+    }
+
+    fun deleteForEveryone(messageId: String) {
+        val id = conversationId.value ?: return
+        viewModelScope.launch {
+            chatRepository.deleteMessageForEveryone(id, messageId)
+        }
+    }
+
     fun startVoiceCall() = startCall(CallType.VOICE)
     fun startVideoCall() = startCall(CallType.VIDEO)
 
