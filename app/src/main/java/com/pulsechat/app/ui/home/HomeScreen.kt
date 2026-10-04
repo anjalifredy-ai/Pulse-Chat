@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Update
 import androidx.compose.material3.FloatingActionButton
@@ -27,6 +29,8 @@ import androidx.compose.ui.res.stringResource
 import com.pulsechat.app.R
 import com.pulsechat.app.ui.calls.CallsTab
 import com.pulsechat.app.ui.chats.ChatsTab
+import com.pulsechat.app.ui.pulse.HomeFeedScreen
+import com.pulsechat.app.ui.pulse.ShortsScreen
 import com.pulsechat.app.ui.settings.SettingsTab
 import com.pulsechat.app.ui.status.StatusTab
 import com.pulsechat.app.util.PermissionHelper
@@ -39,13 +43,11 @@ fun HomeScreen(
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
     var permissionsAsked by remember { mutableStateOf(false) }
-    val context = LocalContext.current
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { /* results — user may deny some; features check again when used */ }
+    ) { }
 
-    // After login: request camera, mic, contacts, location, notifications once
     LaunchedEffect(Unit) {
         if (!permissionsAsked) {
             permissionsAsked = true
@@ -55,35 +57,44 @@ fun HomeScreen(
 
     Scaffold(
         bottomBar = {
-            NavigationBar {
-                NavigationBarItem(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    icon = { Icon(Icons.Default.Chat, contentDescription = null) },
-                    label = { Text(stringResource(R.string.nav_chats)) }
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
-                    icon = { Icon(Icons.Default.Update, contentDescription = null) },
-                    label = { Text(stringResource(R.string.nav_status)) }
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 2,
-                    onClick = { selectedTab = 2 },
-                    icon = { Icon(Icons.Default.Call, contentDescription = null) },
-                    label = { Text(stringResource(R.string.nav_calls)) }
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 3,
-                    onClick = { selectedTab = 3 },
-                    icon = { Icon(Icons.Default.Settings, contentDescription = null) },
-                    label = { Text(stringResource(R.string.nav_settings)) }
-                )
+            // Hide bottom bar on Shorts for full immersive
+            if (selectedTab != 1) {
+                NavigationBar {
+                    NavigationBarItem(
+                        selected = selectedTab == 0,
+                        onClick = { selectedTab = 0 },
+                        icon = { Icon(Icons.Default.Home, contentDescription = null) },
+                        label = { Text("Home") }
+                    )
+                    NavigationBarItem(
+                        selected = selectedTab == 1,
+                        onClick = { selectedTab = 1 },
+                        icon = { Icon(Icons.Default.PlayCircle, contentDescription = null) },
+                        label = { Text("Shorts") }
+                    )
+                    NavigationBarItem(
+                        selected = selectedTab == 2,
+                        onClick = { selectedTab = 2 },
+                        icon = { Icon(Icons.Default.Chat, contentDescription = null) },
+                        label = { Text(stringResource(R.string.nav_chats)) }
+                    )
+                    NavigationBarItem(
+                        selected = selectedTab == 3,
+                        onClick = { selectedTab = 3 },
+                        icon = { Icon(Icons.Default.Update, contentDescription = null) },
+                        label = { Text(stringResource(R.string.nav_status)) }
+                    )
+                    NavigationBarItem(
+                        selected = selectedTab == 4,
+                        onClick = { selectedTab = 4 },
+                        icon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                        label = { Text(stringResource(R.string.nav_settings)) }
+                    )
+                }
             }
         },
         floatingActionButton = {
-            if (selectedTab == 0) {
+            if (selectedTab == 2) {
                 FloatingActionButton(onClick = onNewChat) {
                     Icon(Icons.Default.Chat, contentDescription = stringResource(R.string.new_chat))
                 }
@@ -91,13 +102,14 @@ fun HomeScreen(
         }
     ) { padding ->
         when (selectedTab) {
-            0 -> ChatsTab(
+            0 -> HomeFeedScreen(modifier = Modifier.padding(padding))
+            1 -> ShortsScreen(modifier = Modifier.padding(padding))
+            2 -> ChatsTab(
                 modifier = Modifier.padding(padding),
                 onOpenChat = onOpenChat
             )
-            1 -> StatusTab(modifier = Modifier.padding(padding))
-            2 -> CallsTab(modifier = Modifier.padding(padding))
-            3 -> SettingsTab(
+            3 -> StatusTab(modifier = Modifier.padding(padding))
+            4 -> SettingsTab(
                 modifier = Modifier.padding(padding),
                 onOpenSettings = onSettings
             )
