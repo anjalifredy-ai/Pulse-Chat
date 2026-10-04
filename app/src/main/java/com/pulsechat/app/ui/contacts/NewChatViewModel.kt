@@ -23,9 +23,19 @@ class NewChatViewModel @Inject constructor(
     private val _users = MutableStateFlow<List<User>>(emptyList())
     val users: StateFlow<List<User>> = _users.asStateFlow()
 
+    private val _query = MutableStateFlow("")
+    val query: StateFlow<String> = _query.asStateFlow()
+
     fun loadContacts() {
         viewModelScope.launch {
             _users.value = contactRepository.getAllUsers()
+        }
+    }
+
+    fun search(q: String) {
+        _query.value = q
+        viewModelScope.launch {
+            _users.value = contactRepository.searchUsers(q)
         }
     }
 
@@ -33,7 +43,6 @@ class NewChatViewModel @Inject constructor(
         return chatRepository.createDirectConversation(userId)
     }
 
-    /** WhatsApp-style "Message yourself" */
     suspend fun startSelfChat(): Result<String> {
         val myUid = auth.currentUser?.uid
             ?: return Result.failure(Exception("Not logged in"))

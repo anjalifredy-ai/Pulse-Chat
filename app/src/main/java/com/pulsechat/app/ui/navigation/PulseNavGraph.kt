@@ -1,5 +1,6 @@
 package com.pulsechat.app.ui.navigation
 
+import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -20,6 +21,7 @@ import com.pulsechat.app.ui.call.OutgoingCallScreen
 import com.pulsechat.app.ui.chat.ChatScreen
 import com.pulsechat.app.ui.contacts.NewChatScreen
 import com.pulsechat.app.ui.contacts.NewChatViewModel
+import com.pulsechat.app.ui.document.DocumentViewerScreen
 import com.pulsechat.app.ui.groups.CreateGroupScreen
 import com.pulsechat.app.ui.home.HomeScreen
 import kotlinx.coroutines.launch
@@ -142,12 +144,33 @@ fun PulseNavGraph() {
                 conversationId = conversationId,
                 onBack = { navController.popBackStack() },
                 onOpenContact = { },
-                onVoiceCall = {
-                    navController.navigate("outgoing_call/voice/$conversationId")
+                onVoiceCall = { callId ->
+                    navController.navigate("outgoing_call/voice/$callId")
                 },
-                onVideoCall = {
-                    navController.navigate("outgoing_call/video/$conversationId")
+                onVideoCall = { callId ->
+                    navController.navigate("outgoing_call/video/$callId")
+                },
+                onOpenDocument = { url, name ->
+                    navController.navigate(
+                        "document/${Uri.encode(url)}/${Uri.encode(name)}"
+                    )
                 }
+            )
+        }
+
+        composable(
+            route = "document/{url}/{title}",
+            arguments = listOf(
+                navArgument("url") { type = NavType.StringType },
+                navArgument("title") { type = NavType.StringType }
+            )
+        ) { entry ->
+            val url = Uri.decode(entry.arguments?.getString("url") ?: "")
+            val title = Uri.decode(entry.arguments?.getString("title") ?: "Document")
+            DocumentViewerScreen(
+                url = url,
+                title = title,
+                onBack = { navController.popBackStack() }
             )
         }
 
