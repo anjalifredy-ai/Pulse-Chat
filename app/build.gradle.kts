@@ -16,8 +16,8 @@ android {
         applicationId = "com.pulsechat.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.2.0"
+        versionCode = 4
+        versionName = "1.2.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -26,22 +26,9 @@ android {
         }
     }
 
-    signingConfigs {
-        create("pulseDebug") {
-            val ks = file("pulse-debug.keystore")
-            if (ks.exists()) {
-                storeFile = ks
-                storePassword = "android"
-                keyAlias = "pulsechat"
-                keyPassword = "android"
-            }
-        }
-    }
-
     buildTypes {
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -49,10 +36,6 @@ android {
         }
         debug {
             isMinifyEnabled = false
-            val pulse = signingConfigs.findByName("pulseDebug")
-            if (pulse?.storeFile?.exists() == true) {
-                signingConfig = pulse
-            }
         }
     }
 
