@@ -1,82 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Pulse Chat</string>
-    <string name="app_tagline">Connect. Talk. Pulse.</string>
-
-    <!-- Auth -->
-    <string name="welcome_title">Welcome to Pulse Chat</string>
-    <string name="welcome_subtitle">Secure messaging and crystal-clear calls</string>
-    <string name="enter_phone">Enter your phone number</string>
-    <string name="phone_hint">Phone number</string>
-    <string name="continue_btn">Continue</string>
-    <string name="verify_otp">Verify code</string>
-    <string name="otp_sent">We sent a verification code to %1$s</string>
-    <string name="resend_otp">Resend code</string>
-    <string name="resend_in">Resend in %1$ds</string>
-    <string name="invalid_otp">Invalid verification code</string>
-    <string name="profile_setup">Set up your profile</string>
-    <string name="display_name">Your name</string>
-    <string name="about_hint">About (optional)</string>
-    <string name="save_profile">Save</string>
-
-    <!-- Navigation -->
     <string name="nav_chats">Chats</string>
     <string name="nav_status">Status</string>
     <string name="nav_calls">Calls</string>
     <string name="nav_settings">Settings</string>
-
-    <!-- Chats -->
     <string name="new_chat">New chat</string>
-    <string name="new_group">New group</string>
-    <string name="search_hint">Search…</string>
-    <string name="type_message">Message</string>
     <string name="no_chats">No chats yet</string>
-    <string name="start_conversation">Start a conversation</string>
-
-    <!-- Calls -->
-    <string name="incoming_call">Incoming call</string>
-    <string name="outgoing_call">Calling…</string>
-    <string name="call_ended">Call ended</string>
-    <string name="missed_call">Missed call</string>
-    <string name="voice_call">Voice call</string>
-    <string name="video_call">Video call</string>
-    <string name="mute">Mute</string>
-    <string name="speaker">Speaker</string>
-    <string name="end_call">End call</string>
-    <string name="camera_off">Camera off</string>
-    <string name="switch_camera">Switch camera</string>
-
-    <!-- Status -->
-    <string name="my_status">My status</string>
-    <string name="add_status">Add status</string>
-    <string name="viewed_by">Viewed by</string>
-
-    <!-- Permissions -->
-    <string name="permission_contacts">Contacts permission is needed to find people you know</string>
-    <string name="permission_microphone">Microphone is required for voice messages and calls</string>
-    <string name="permission_camera">Camera is required for photos, videos and video calls</string>
-    <string name="permission_notifications">Notifications keep you updated on new messages and calls</string>
-    <string name="open_settings">Open settings</string>
-    <string name="grant_permission">Grant permission</string>
-
-    <!-- Errors -->
-    <string name="error_network">No internet connection</string>
-    <string name="error_generic">Something went wrong. Please try again.</string>
-    <string name="error_auth">Authentication failed</string>
-    <string name="retry">Retry</string>
-
-    <!-- Settings -->
+    <string name="start_conversation">Tap + to start a conversation</string>
     <string name="account">Account</string>
     <string name="privacy">Privacy</string>
     <string name="notifications">Notifications</string>
     <string name="storage_data">Storage and data</string>
     <string name="appearance">Appearance</string>
     <string name="help">Help</string>
-    <string name="about">About</string>
     <string name="logout">Log out</string>
-    <string name="delete_account">Delete account</string>
-
-    <string name="theme_system">System default</string>
-    <string name="theme_light">Light</string>
-    <string name="theme_dark">Dark</string>
+    <string name="my_status">My status</string>
+    <string name="add_status">Tap to add status update</string>
+    <!-- Web client ID from Firebase (client_type 3) — required for Google Sign-In ID token -->
+    <string name="default_web_client_id" translatable="false">225740234992-f1lr0gucd5ktb3vu26ee06no1et0hhmd.apps.googleusercontent.com</string>
 </resources>

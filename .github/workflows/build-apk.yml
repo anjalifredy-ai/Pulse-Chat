@@ -35,8 +35,13 @@ jobs:
         run: |
           SDK_PATH="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
           echo "sdk.dir=$SDK_PATH" > local.properties
-          echo "ANDROID_HOME=$SDK_PATH"
-          ls -la "$SDK_PATH" || true
+
+      - name: Decode debug keystore (stable SHA-1 for Google Sign-In)
+        run: |
+          mkdir -p app
+          base64 -d keystore/pulse-debug.b64 > app/pulse-debug.keystore
+          ls -la app/pulse-debug.keystore
+          keytool -list -v -keystore app/pulse-debug.keystore -alias pulsechat -storepass android | grep -E 'SHA1|SHA256' || true
 
       - name: Ensure Gradle Wrapper
         run: |

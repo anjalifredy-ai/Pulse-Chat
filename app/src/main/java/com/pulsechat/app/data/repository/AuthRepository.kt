@@ -27,6 +27,12 @@ class AuthRepository @Inject constructor(
     private val cloudinary: CloudinaryUploader,
     @ApplicationContext private val context: Context
 ) {
+    companion object {
+        // From google-services.json oauth_client client_type 3 (Web)
+        private const val WEB_CLIENT_ID =
+            "225740234992-f1lr0gucd5ktb3vu26ee06no1et0hhmd.apps.googleusercontent.com"
+    }
+
     fun currentFirebaseUser() = auth.currentUser
 
     suspend fun currentUser(): User? {
@@ -41,9 +47,10 @@ class AuthRepository @Inject constructor(
 
     fun getGoogleSignInIntent(): Intent {
         val webClientId = try {
-            context.getString(R.string.default_web_client_id)
+            val fromRes = context.getString(R.string.default_web_client_id)
+            if (fromRes.isNotBlank()) fromRes else WEB_CLIENT_ID
         } catch (e: Exception) {
-            ""
+            WEB_CLIENT_ID
         }
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestIdToken(webClientId)
@@ -62,22 +69,29 @@ class AuthRepository @Inject constructor(
             val account = task.getResult(ApiException::class.java)
             val idToken = account.idToken
                 ?: return Result.failure(
-                    Exception("Google setup incomplete. Use Email login for now, or add SHA-1 in Firebase.")
+                    Exception("No ID token. Add SHA-1 in Firebase (see GOOGLE_LOGIN.md)")
                 )
             val credential = GoogleAuthProvider.getCredential(idToken, null)
             val result = auth.signInWithCredential(credential).await()
             val fbUser = result.user ?: return Result.failure(Exception("No user"))
-            Result.success(ensureUserDoc(fbUser.uid, fbUser.email, fbUser.displayName, fbUser.photoUrl?.toString()))
+            Result.success(
+                ensureUserDoc(
+                    fbUser.uid,
+                    fbUser.email,
+                    fbUser.displayName,
+                    fbUser.photoUrl?.toString()
+                )
+            )
         } catch (e: ApiException) {
             val msg = when (e.statusCode) {
-                10 -> "Google Error 10: Add app SHA-1 in Firebase Project Settings. Meanwhile use Email login."
+                10 -> "Google Error 10: Firebase mein SHA-1 add karo (GOOGLE_LOGIN.md). Email se login karo."
                 12501 -> "Google sign-in cancelled"
                 7 -> "Network error. Check internet."
-                else -> "Google sign-in failed (code ${e.statusCode}). Try Email login."
+                else -> "Google failed (code ${e.statusCode}). Use Email login."
             }
             Result.failure(Exception(msg))
         } catch (e: Exception) {
-            Result.failure(Exception(e.message ?: "Google sign-in failed. Try Email login."))
+            Result.failure(Exception(e.message ?: "Google sign-in failed"))
         }
     }
 
@@ -162,20 +176,17 @@ class AuthRepository @Inject constructor(
                 val upload = cloudinary.uploadBlocking(photoUri, "profile_photos")
                 photoUrl = upload.getOrElse { return Result.failure(it) }
             }
-
             val profileUpdates = UserProfileChangeRequest.Builder()
                 .setDisplayName(displayName)
                 .apply { if (photoUrl != null) setPhotoUri(Uri.parse(photoUrl)) }
                 .build()
             fbUser.updateProfile(profileUpdates).await()
-
             val updates = mutableMapOf<String, Any>(
                 "displayName" to displayName,
                 "about" to about,
                 "updatedAt" to Date()
             )
             if (photoUrl != null) updates["photoUrl"] = photoUrl
-
             firestore.collection("users").document(fbUser.uid).update(updates).await()
             Result.success(Unit)
         } catch (e: Exception) {
