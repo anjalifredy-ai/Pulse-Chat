@@ -3,6 +3,7 @@ package com.pulsechat.app.ui.chat
 import android.media.MediaPlayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -61,11 +62,7 @@ fun MessageBubble(
 
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = if (isMine) {
-            androidx.compose.foundation.layout.Arrangement.End
-        } else {
-            androidx.compose.foundation.layout.Arrangement.Start
-        }
+        horizontalArrangement = if (isMine) Arrangement.End else Arrangement.Start
     ) {
         Column(
             modifier = Modifier
@@ -98,7 +95,7 @@ fun MessageBubble(
                     }
                     if (!message.text.isNullOrBlank() && message.text != "📷 Photo") {
                         Text(
-                            message.text,
+                            message.text!!,
                             color = Color.White,
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
@@ -107,10 +104,7 @@ fun MessageBubble(
                 }
 
                 MessageType.VOICE, MessageType.AUDIO -> {
-                    VoiceBubble(
-                        url = message.mediaUrl,
-                        durationMs = message.mediaDuration
-                    )
+                    VoiceBubble(url = message.mediaUrl, durationMs = message.mediaDuration)
                 }
 
                 MessageType.DOCUMENT -> {
@@ -131,9 +125,9 @@ fun MessageBubble(
                                 .background(Color.White.copy(alpha = 0.12f)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Default.Description, null, tint = Color.White)
+                            Icon(Icons.Default.Description, contentDescription = null, tint = Color.White)
                         }
-                        Spacer(Modifier.width(10.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
                                 message.fileName ?: "Document",
@@ -191,7 +185,7 @@ fun MessageBubble(
                     Text(time, color = Color.White.copy(alpha = 0.5f), fontSize = 10.sp)
                 }
                 if (isMine) {
-                    Spacer(Modifier.width(3.dp))
+                    Spacer(modifier = Modifier.width(3.dp))
                     Icon(
                         imageVector = if (isRead) Icons.Default.DoneAll else Icons.Default.Done,
                         contentDescription = null,
@@ -238,9 +232,7 @@ private fun VoiceBubble(url: String?, durationMs: Long) {
                             player = MediaPlayer().apply {
                                 setDataSource(url)
                                 prepare()
-                                setOnCompletionListener {
-                                    playing = false
-                                }
+                                setOnCompletionListener { playing = false }
                                 start()
                             }
                         } else {
@@ -263,7 +255,7 @@ private fun VoiceBubble(url: String?, durationMs: Long) {
                 tint = Color.White
             )
         }
-        Spacer(Modifier.width(8.dp))
+        Spacer(modifier = Modifier.width(8.dp))
         Column {
             Text("Voice message", color = Color.White, style = MaterialTheme.typography.bodyMedium)
             Text(label, color = Color.White.copy(alpha = 0.55f), fontSize = 12.sp)
