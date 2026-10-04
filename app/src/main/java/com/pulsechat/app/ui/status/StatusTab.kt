@@ -25,6 +25,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -39,7 +40,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -113,8 +113,8 @@ fun StatusTab(
                     }
                 }
 
-                items(grouped.entries.toList(), key = { it.key }) { (userId, items) ->
-                    val preview = items.firstOrNull()?.let {
+                items(grouped.entries.toList(), key = { it.key }) { (userId, list) ->
+                    val preview = list.firstOrNull()?.let {
                         when {
                             !it.text.isNullOrBlank() -> it.text
                             it.type == StatusType.IMAGE -> "Photo status"
@@ -139,11 +139,11 @@ fun StatusTab(
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
-                                "${items.size} update${if (items.size > 1) "s" else ""}",
+                                "${list.size} update${if (list.size > 1) "s" else ""}",
                                 style = MaterialTheme.typography.titleMedium
                             )
                             Text(
-                                preview ?: "",
+                                preview,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

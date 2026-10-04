@@ -36,12 +36,16 @@ jobs:
           SDK_PATH="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
           echo "sdk.dir=$SDK_PATH" > local.properties
 
-      - name: Decode debug keystore (stable SHA-1 for Google Sign-In)
+      - name: Decode debug keystore
         run: |
           mkdir -p app
-          base64 -d keystore/pulse-debug.b64 > app/pulse-debug.keystore
-          ls -la app/pulse-debug.keystore
-          keytool -list -v -keystore app/pulse-debug.keystore -alias pulsechat -storepass android | grep -E 'SHA1|SHA256' || true
+          if [ -f keystore/pulse-debug.b64 ]; then
+            base64 -d keystore/pulse-debug.b64 > app/pulse-debug.keystore
+            ls -la app/pulse-debug.keystore
+            keytool -list -keystore app/pulse-debug.keystore -alias pulsechat -storepass android || true
+          else
+            echo "No keystore — using default debug"
+          fi
 
       - name: Ensure Gradle Wrapper
         run: |
@@ -52,11 +56,20 @@ jobs:
 
       - name: Build Debug APK
         run: |
+          set -o pipefail
           if [ -x "./gradlew" ]; then
-            ./gradlew assembleDebug --stacktrace --no-daemon
+            ./gradlew assembleDebug --stacktrace --no-daemon 2>&1 | tee build.log
           else
-            gradle assembleDebug --stacktrace --no-daemon
+            gradle assembleDebug --stacktrace --no-daemon 2>&1 | tee build.log
           fi
+
+      - name: Show compile errors
+        if: failure()
+        run: |
+          echo "===== ERRORS ====="
+          grep -E "e: |error:|FAILED|Unresolved|What went wrong" build.log | tail -80 || true
+          echo "===== TAIL ====="
+          tail -100 build.log || true
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
@@ -67,6 +80,11 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-      - name: List outputs
+      - name: Upload build log
+        uses: actions/upload-artifact@v4
         if: always()
-        run: find app/build/outputs -name "*.apk" -type f 2>/dev/null || echo "No APK produced"
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: ignore
+          retention-days: 7
