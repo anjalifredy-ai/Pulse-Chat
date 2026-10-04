@@ -25,4 +25,15 @@ class ContactRepository @Inject constructor(
             emptyList()
         }
     }
+
+    /** Search registered users by name or email (stored in phoneNumber field for email logins) */
+    suspend fun searchUsers(query: String): List<User> {
+        val q = query.trim().lowercase()
+        if (q.isBlank()) return getAllUsers()
+        return getAllUsers().filter {
+            it.displayName.lowercase().contains(q) ||
+                it.phoneNumber.lowercase().contains(q) ||
+                (it.username?.lowercase()?.contains(q) == true)
+        }
+    }
 }

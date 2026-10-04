@@ -34,7 +34,6 @@ class ChatRepository @Inject constructor(
             close()
             return@callbackFlow
         }
-
         val listener = firestore.collection("conversations")
             .whereArrayContains("participants", currentUid)
             .addSnapshotListener { snapshot, error ->
@@ -47,7 +46,6 @@ class ChatRepository @Inject constructor(
                 }?.sortedByDescending { it.updatedAt?.time ?: 0L } ?: emptyList()
                 trySend(list)
             }
-
         awaitClose { listener.remove() }
     }
 
@@ -73,7 +71,6 @@ class ChatRepository @Inject constructor(
     suspend fun sendTextMessage(conversationId: String, text: String): Result<Unit> {
         val currentUid = uid ?: return Result.failure(Exception("Not authenticated"))
         return try {
-            val clientId = UUID.randomUUID().toString()
             val ref = firestore.collection("conversations")
                 .document(conversationId)
                 .collection("messages")
@@ -86,29 +83,83 @@ class ChatRepository @Inject constructor(
                 text = text,
                 status = MessageStatus.SENT,
                 createdAt = Date(),
-                clientId = clientId
+                clientId = UUID.randomUUID().toString()
             )
             ref.set(message).await()
-
-            firestore.collection("conversations").document(conversationId)
-                .update(
-                    mapOf(
-                        "lastMessage" to LastMessage(
-                            id = ref.id,
-                            text = text,
-                            type = MessageType.TEXT,
-                            senderId = currentUid,
-                            timestamp = Date(),
-                            status = MessageStatus.SENT
-                        ),
-                        "updatedAt" to Date()
-                    )
-                ).await()
-
+            updateLastMessage(conversationId, ref.id, text, MessageType.TEXT, currentUid)
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    suspend fun sendMediaMessage(
+        conversationId: String,
+        type: MessageType,
+        mediaUrl: String,
+        thumbnailUrl: String? = null,
+        fileName: String? = null,
+        mediaSize: Long = 0,
+        mediaDuration: Long = 0,
+        caption: String? = null
+    ): Result<Unit> {
+        val currentUid = uid ?: return Result.failure(Exception("Not authenticated"))
+        return try {
+            val ref = firestore.collection("conversations")
+                .document(conversationId)
+                .collection("messages")
+                .document()
+            val message = Message(
+                id = ref.id,
+                conversationId = conversationId,
+                senderId = currentUid,
+                type = type,
+                text = caption,
+                mediaUrl = mediaUrl,
+                mediaThumbnailUrl = thumbnailUrl,
+                fileName = fileName,
+                mediaSize = mediaSize,
+                mediaDuration = mediaDuration,
+                status = MessageStatus.SENT,
+                createdAt = Date(),
+                clientId = UUID.randomUUID().toString()
+            )
+            ref.set(message).await()
+            val preview = caption ?: when (type) {
+                MessageType.IMAGE -> "📷 Photo"
+                MessageType.VIDEO -> "🎬 Video"
+                MessageType.VOICE, MessageType.AUDIO -> "🎤 Voice message"
+                MessageType.DOCUMENT -> "📄 ${fileName ?: "Document"}"
+                else -> "Media"
+            }
+            updateLastMessage(conversationId, ref.id, preview, type, currentUid)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    private suspend fun updateLastMessage(
+        conversationId: String,
+        msgId: String,
+        text: String,
+        type: MessageType,
+        senderId: String
+    ) {
+        firestore.collection("conversations").document(conversationId)
+            .update(
+                mapOf(
+                    "lastMessage" to LastMessage(
+                        id = msgId,
+                        text = text,
+                        type = type,
+                        senderId = senderId,
+                        timestamp = Date(),
+                        status = MessageStatus.SENT
+                    ),
+                    "updatedAt" to Date()
+                )
+            ).await()
     }
 
     private suspend fun loadParticipantInfo(userId: String): ParticipantInfo {
@@ -157,7 +208,6 @@ class ChatRepository @Inject constructor(
         }
     }
 
-    /** Message yourself (notes) — single-participant conversation */
     suspend fun createSelfConversation(myUid: String): Result<String> {
         return try {
             val existing = firestore.collection("conversations")
@@ -171,11 +221,9 @@ class ChatRepository @Inject constructor(
                         it.participants.contains(myUid)
                 }
             if (existing != null) return Result.success(existing.id)
-
             val me = loadParticipantInfo(myUid)
             val selfInfo = me.copy(
-                displayName = if (me.displayName.isBlank()) "You"
-                else "${me.displayName} (You)"
+                displayName = if (me.displayName.isBlank()) "You" else "${me.displayName} (You)"
             )
             val ref = firestore.collection("conversations").document()
             val conv = Conversation(
@@ -191,6 +239,46 @@ class ChatRepository @Inject constructor(
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    /** Blue ticks: mark others' messages as READ when chat is open */
+    suspend fun markMessagesRead(conversationId: String): Result<Unit> {
+        val currentUid = uid ?: return Result.failure(Exception("Not authenticated"))
+        return try {
+            val snaps = firestore.collection("conversations")
+                .document(conversationId)
+                .collection("messages")
+                .whereNotEqualTo("senderId", currentUid)
+                .get()
+                .await()
+            val batch = firestore.batch()
+            var count = 0
+            for (doc in snaps.documents) {
+                val msg = doc.toObject(Message::class.java) ?: continue
+                if (currentUid !in msg.readBy) {
+                    batch.update(
+                        doc.reference,
+                        mapOf(
+                            "readBy" to FieldValue.arrayUnion(currentUid),
+                            "status" to MessageStatus.READ.name
+                        )
+                    )
+                    count++
+                    if (count >= 400) break
+                }
+            }
+            if (count > 0) batch.commit().await()
+            firestore.collection("conversations").document(conversationId)
+                .update("unreadCounts.$currentUid", 0)
+                .await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun markConversationRead(conversationId: String): Result<Unit> {
+        return markMessagesRead(conversationId)
     }
 
     suspend fun deleteMessageForMe(conversationId: String, messageId: String): Result<Unit> {
@@ -212,18 +300,6 @@ class ChatRepository @Inject constructor(
             firestore.collection("conversations").document(conversationId)
                 .collection("messages").document(messageId)
                 .update("reactions.$currentUid", emoji)
-                .await()
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    suspend fun markConversationRead(conversationId: String): Result<Unit> {
-        val currentUid = uid ?: return Result.failure(Exception("Not authenticated"))
-        return try {
-            firestore.collection("conversations").document(conversationId)
-                .update("unreadCounts.$currentUid", 0)
                 .await()
             Result.success(Unit)
         } catch (e: Exception) {
