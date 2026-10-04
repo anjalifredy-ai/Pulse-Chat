@@ -63,22 +63,13 @@ fun HomeFeedScreen(modifier: Modifier = Modifier) {
 
     Column(modifier = modifier.fillMaxSize().background(Color(0xFF0A0A0C))) {
         TopAppBar(
-            title = {
-                Text(
-                    "Pulse", 
-                    fontWeight = FontWeight.Bold, 
-                    color = Color.White
-                )
-            },
+            title = { Text("Pulse", fontWeight = FontWeight.Bold, color = Color.White) },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF121218))
         )
 
         LazyColumn(modifier = Modifier.fillMaxSize()) {
             items(PulseFeed.homeVideos, key = { it.id }) { video ->
-                VideoCard(
-                    video = video,
-                    onClick = { playing = video }
-                )
+                VideoCard(video = video, onClick = { playing = video })
             }
             item { Spacer(Modifier.height(80.dp)) }
         }
@@ -159,7 +150,6 @@ private fun TheaterPlayer(
     val view = LocalView.current
     val activity = view.context as? Activity
 
-    // Immersive: hide status bar + nav (battery, time, etc.)
     DisposableEffect(Unit) {
         val window = activity?.window
         val controller = window?.let {
@@ -221,7 +211,3 @@ private fun TheaterPlayer(
         }
     }
 }
-
-private fun Modifier.background(color: Color) = this.then(
-    androidx.compose.foundation.background(color)
-)
