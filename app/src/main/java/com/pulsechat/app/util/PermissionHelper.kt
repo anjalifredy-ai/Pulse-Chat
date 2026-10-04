@@ -23,11 +23,40 @@ object PermissionHelper {
         ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
                 PackageManager.PERMISSION_GRANTED
 
+    fun hasLocation(context: Context): Boolean =
+        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
+                PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) ==
+                PackageManager.PERMISSION_GRANTED
+
     fun hasNotifications(context: Context): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
                     PackageManager.PERMISSION_GRANTED
         } else true
+    }
+
+    /** All runtime permissions we ask after login */
+    fun requiredAfterLogin(): Array<String> {
+        val list = mutableListOf(
+            Manifest.permission.CAMERA,
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.READ_CONTACTS,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            list += Manifest.permission.POST_NOTIFICATIONS
+            list += Manifest.permission.READ_MEDIA_IMAGES
+            list += Manifest.permission.READ_MEDIA_VIDEO
+            list += Manifest.permission.READ_MEDIA_AUDIO
+        } else if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2) {
+            list += Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            list += Manifest.permission.BLUETOOTH_CONNECT
+        }
+        return list.toTypedArray()
     }
 
     fun openAppSettings(context: Context) {
@@ -37,11 +66,4 @@ object PermissionHelper {
         }
         context.startActivity(intent)
     }
-
-    val contactsPermission = Manifest.permission.READ_CONTACTS
-    val micPermission = Manifest.permission.RECORD_AUDIO
-    val cameraPermission = Manifest.permission.CAMERA
-    val notificationPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        Manifest.permission.POST_NOTIFICATIONS
-    } else null
 }

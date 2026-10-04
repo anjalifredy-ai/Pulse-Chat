@@ -1,5 +1,7 @@
 package com.pulsechat.app.ui.home
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
@@ -13,17 +15,21 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.pulsechat.app.R
 import com.pulsechat.app.ui.calls.CallsTab
 import com.pulsechat.app.ui.chats.ChatsTab
 import com.pulsechat.app.ui.settings.SettingsTab
 import com.pulsechat.app.ui.status.StatusTab
+import com.pulsechat.app.util.PermissionHelper
 
 @Composable
 fun HomeScreen(
@@ -32,6 +38,20 @@ fun HomeScreen(
     onSettings: () -> Unit
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
+    var permissionsAsked by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { /* results — user may deny some; features check again when used */ }
+
+    // After login: request camera, mic, contacts, location, notifications once
+    LaunchedEffect(Unit) {
+        if (!permissionsAsked) {
+            permissionsAsked = true
+            permissionLauncher.launch(PermissionHelper.requiredAfterLogin())
+        }
+    }
 
     Scaffold(
         bottomBar = {

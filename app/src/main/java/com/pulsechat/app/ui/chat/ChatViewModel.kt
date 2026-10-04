@@ -1,14 +1,19 @@
 package com.pulsechat.app.ui.chat
 
+import android.net.Uri
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.pulsechat.app.data.media.CloudinaryUploader
 import com.pulsechat.app.data.model.Conversation
 import com.pulsechat.app.data.model.ConversationType
 import com.pulsechat.app.data.model.Message
+import com.pulsechat.app.data.model.MessageType
+import com.pulsechat.app.data.repository.CallRepository
 import com.pulsechat.app.data.repository.ChatRepository
+import com.pulsechat.app.data.model.CallType
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,6 +31,8 @@ import javax.inject.Inject
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
+    private val callRepository: CallRepository,
+    private val cloudinary: CloudinaryUploader,
     private val auth: FirebaseAuth,
     private val firestore: FirebaseFirestore
 ) : ViewModel() {
@@ -40,8 +47,17 @@ class ChatViewModel @Inject constructor(
     private val _photoUrl = MutableStateFlow<String?>(null)
     val photoUrl: StateFlow<String?> = _photoUrl.asStateFlow()
 
-    private val _wallpaperColor = MutableStateFlow(Color(0xFF0B141A))
-    val wallpaperColor: StateFlow<Color> = _wallpaperColor.asStateFlow()
+    private val _otherUserId = MutableStateFlow<String?>(null)
+    val otherUserId: StateFlow<String?> = _otherUserId.asStateFlow()
+
+    private val _uploading = MutableStateFlow(false)
+    val uploading: StateFlow<Boolean> = _uploading.asStateFlow()
+
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
+    private val _startedCallId = MutableStateFlow<String?>(null)
+    val startedCallId: StateFlow<String?> = _startedCallId.asStateFlow()
 
     val messages: StateFlow<List<Message>> = conversationId
         .flatMapLatest { id ->
@@ -66,8 +82,12 @@ class ChatViewModel @Inject constructor(
             if (conv.type == ConversationType.GROUP) {
                 _title.value = conv.groupName ?: "Group"
                 _photoUrl.value = conv.groupPhotoUrl
+            } else if (conv.participants.size == 1) {
+                _title.value = "My (You)"
+                _photoUrl.value = conv.participantDetails[myUid]?.photoUrl
             } else {
                 val otherId = conv.participants.firstOrNull { it != myUid }
+                _otherUserId.value = otherId
                 val info = otherId?.let { conv.participantDetails[it] }
                 if (info != null && info.displayName.isNotBlank()) {
                     _title.value = info.displayName
@@ -81,10 +101,6 @@ class ChatViewModel @Inject constructor(
         } catch (_: Exception) { }
     }
 
-    fun setWallpaper(color: Color) {
-        _wallpaperColor.value = color
-    }
-
     fun sendMessage(text: String) {
         val id = conversationId.value ?: return
         viewModelScope.launch {
@@ -92,17 +108,70 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    fun deleteForMe(messageId: String) {
+    fun sendMedia(uri: Uri, type: MessageType, fileName: String? = null) {
         val id = conversationId.value ?: return
         viewModelScope.launch {
-            chatRepository.deleteMessageForMe(id, messageId)
+            _uploading.value = true
+            _error.value = null
+            val upload = cloudinary.uploadBlocking(uri, "chat_media")
+            upload.fold(
+                onSuccess = { url ->
+                    chatRepository.sendMediaMessage(
+                        conversationId = id,
+                        type = type,
+                        mediaUrl = url,
+                        fileName = fileName,
+                        caption = fileName
+                    )
+                },
+                onFailure = { e ->
+                    _error.value = e.message ?: "Upload failed"
+                }
+            )
+            _uploading.value = false
         }
     }
 
-    fun react(messageId: String, emoji: String) {
+    fun sendLocation(lat: Double, lng: Double) {
         val id = conversationId.value ?: return
         viewModelScope.launch {
-            chatRepository.addReaction(id, messageId, emoji)
+            val maps = "https://maps.google.com/?q=$lat,$lng"
+            chatRepository.sendTextMessage(id, "📍 Location\n$maps")
         }
+    }
+
+    fun sendContact(name: String, phone: String) {
+        val id = conversationId.value ?: return
+        viewModelScope.launch {
+            chatRepository.sendTextMessage(id, "👤 $name\n📞 $phone")
+        }
+    }
+
+    fun startVoiceCall() {
+        startCall(CallType.VOICE)
+    }
+
+    fun startVideoCall() {
+        startCall(CallType.VIDEO)
+    }
+
+    private fun startCall(type: CallType) {
+        val other = _otherUserId.value
+        if (other.isNullOrBlank()) {
+            // Self-chat — still open outgoing UI
+            _startedCallId.value = "local_${System.currentTimeMillis()}"
+            return
+        }
+        viewModelScope.launch {
+            val result = callRepository.startCall(other, type)
+            result.fold(
+                onSuccess = { callId -> _startedCallId.value = callId },
+                onFailure = { e -> _error.value = e.message }
+            )
+        }
+    }
+
+    fun clearStartedCall() {
+        _startedCallId.value = null
     }
 }
