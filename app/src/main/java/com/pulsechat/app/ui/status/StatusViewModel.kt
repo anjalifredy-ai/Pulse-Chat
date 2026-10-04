@@ -1,11 +1,11 @@
 package com.pulsechat.app.ui.status
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.pulsechat.app.data.media.CloudinaryUploader
 import com.pulsechat.app.data.model.StatusItem
+import com.pulsechat.app.data.model.StatusType
 import com.pulsechat.app.data.repository.StatusRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -16,10 +16,9 @@ import javax.inject.Inject
 
 @HiltViewModel
 class StatusViewModel @Inject constructor(
-    private val statusRepository: StatusRepository
+    private val statusRepository: StatusRepository,
+    private val cloudinary: CloudinaryUploader
 ) : ViewModel() {
-
-    var showCreateDialog by mutableStateOf(false)
 
     val statuses: StateFlow<List<StatusItem>> = statusRepository
         .observeRecentStatuses()
@@ -28,6 +27,15 @@ class StatusViewModel @Inject constructor(
     fun postQuickTextStatus(text: String) {
         viewModelScope.launch {
             statusRepository.postTextStatus(text)
+        }
+    }
+
+    fun postMediaStatus(uri: Uri, type: StatusType) {
+        viewModelScope.launch {
+            val upload = cloudinary.uploadBlocking(uri, "status_media")
+            upload.onSuccess { url ->
+                statusRepository.postMediaStatus(type = type, mediaUrl = url)
+            }
         }
     }
 }

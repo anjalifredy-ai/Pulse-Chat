@@ -1,5 +1,13 @@
 package com.pulsechat.app.ui.chat
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.location.Location
+import android.location.LocationManager
+import android.net.Uri
+import android.provider.ContactsContract
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -33,6 +41,7 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -54,15 +63,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.pulsechat.app.data.model.Message
+import com.pulsechat.app.data.model.MessageType
 import com.pulsechat.app.ui.components.CircleAvatar
-import com.pulsechat.app.ui.theme.BubbleOutgoing
 import com.pulsechat.app.ui.theme.PulseGreen
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -80,22 +92,111 @@ fun ChatScreen(
     onVideoCall: (String) -> Unit = {},
     viewModel: ChatViewModel = hiltViewModel()
 ) {
-    LaunchedEffect(conversationId) {
-        viewModel.load(conversationId)
-    }
+    val context = LocalContext.current
+    LaunchedEffect(conversationId) { viewModel.load(conversationId) }
 
     val messages by viewModel.messages.collectAsState()
     val currentUid by viewModel.currentUid.collectAsState()
     val title by viewModel.title.collectAsState()
     val photoUrl by viewModel.photoUrl.collectAsState()
+    val uploading by viewModel.uploading.collectAsState()
+    val startedCallId by viewModel.startedCallId.collectAsState()
     var input by remember { mutableStateOf("") }
     var showAttach by remember { mutableStateOf(false) }
+    var cameraUri by remember { mutableStateOf<Uri?>(null) }
     val listState = rememberLazyListState()
 
     LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.lastIndex)
+        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
+    }
+
+    LaunchedEffect(startedCallId) {
+        startedCallId?.let { id ->
+            onVoiceCall(id)
+            viewModel.clearStartedCall()
         }
+    }
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let { viewModel.sendMedia(it, MessageType.IMAGE) }
+    }
+
+    val videoLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let { viewModel.sendMedia(it, MessageType.VIDEO) }
+    }
+
+    val documentLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let {
+            val name = it.lastPathSegment ?: "document.pdf"
+            viewModel.sendMedia(it, MessageType.DOCUMENT, name)
+        }
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { ok ->
+        if (ok) cameraUri?.let { viewModel.sendMedia(it, MessageType.IMAGE) }
+    }
+
+    val contactLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickContact()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        try {
+            val cursor = context.contentResolver.query(uri, null, null, null, null)
+            cursor?.use {
+                if (it.moveToFirst()) {
+                    val nameIdx = it.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME)
+                    val idIdx = it.getColumnIndex(ContactsContract.Contacts._ID)
+                    val name = if (nameIdx >= 0) it.getString(nameIdx) else "Contact"
+                    val contactId = if (idIdx >= 0) it.getString(idIdx) else null
+                    var phone = ""
+                    if (contactId != null) {
+                        val phones = context.contentResolver.query(
+                            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                            null,
+                            "${ContactsContract.CommonDataKinds.Phone.CONTACT_ID}=?",
+                            arrayOf(contactId),
+                            null
+                        )
+                        phones?.use { p ->
+                            if (p.moveToFirst()) {
+                                val pIdx = p.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                                if (pIdx >= 0) phone = p.getString(pIdx)
+                            }
+                        }
+                    }
+                    viewModel.sendContact(name ?: "Contact", phone)
+                }
+            }
+        } catch (_: Exception) { }
+    }
+
+    val locationPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) sendCurrentLocation(context, viewModel)
+    }
+
+    val callPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        if (results.values.any { it }) {
+            viewModel.startVoiceCall()
+        }
+    }
+
+    fun launchCamera() {
+        val file = File(context.cacheDir, "cam_${System.currentTimeMillis()}.jpg")
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        cameraUri = uri
+        cameraLauncher.launch(uri)
     }
 
     Scaffold(
@@ -109,19 +210,11 @@ fun ChatScreen(
                     actionIconContentColor = Color.White
                 ),
                 title = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable { onOpenContact("") }
-                    ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         CircleAvatar(photoUrl = photoUrl, name = title, size = 36.dp)
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
-                            Text(
-                                title,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color.White,
-                                maxLines = 1
-                            )
+                            Text(title, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1)
                             Text(
                                 if (title.contains("You", ignoreCase = true)) "Message yourself"
                                 else "online",
@@ -137,10 +230,18 @@ fun ChatScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { onVideoCall(conversationId) }) {
+                    IconButton(onClick = {
+                        callPermission.launch(
+                            arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
+                        )
+                        viewModel.startVideoCall()
+                    }) {
                         Icon(Icons.Default.Videocam, contentDescription = "Video")
                     }
-                    IconButton(onClick = { onVoiceCall(conversationId) }) {
+                    IconButton(onClick = {
+                        callPermission.launch(arrayOf(Manifest.permission.RECORD_AUDIO))
+                        viewModel.startVoiceCall()
+                    }) {
                         Icon(Icons.Default.Call, contentDescription = "Call")
                     }
                 }
@@ -148,41 +249,55 @@ fun ChatScreen(
         },
         bottomBar = {
             Column(modifier = Modifier.background(BarBg)) {
+                if (uploading) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(8.dp),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = PulseGreen)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Uploading…", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
+                    }
+                }
                 if (showAttach) {
                     AttachPanel(
-                        onPick = { label ->
+                        onGallery = { showAttach = false; galleryLauncher.launch("image/*") },
+                        onVideo = { showAttach = false; videoLauncher.launch("video/*") },
+                        onCamera = { showAttach = false; launchCamera() },
+                        onDocument = {
                             showAttach = false
-                            viewModel.sendMessage("[$label]")
-                        }
+                            documentLauncher.launch(arrayOf("application/pdf", "*/*"))
+                        },
+                        onLocation = {
+                            showAttach = false
+                            if (ContextCompat.checkSelfPermission(
+                                    context, Manifest.permission.ACCESS_FINE_LOCATION
+                                ) == PackageManager.PERMISSION_GRANTED
+                            ) {
+                                sendCurrentLocation(context, viewModel)
+                            } else {
+                                locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                            }
+                        },
+                        onContact = { showAttach = false; contactLauncher.launch(null) }
                     )
                 }
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 6.dp, vertical = 6.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(24.dp))
-                            .background(InputBg),
+                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(24.dp)).background(InputBg),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         IconButton(onClick = { }) {
-                            Icon(
-                                Icons.Default.EmojiEmotions,
-                                contentDescription = "Emoji",
-                                tint = Color.White.copy(alpha = 0.6f)
-                            )
+                            Icon(Icons.Default.EmojiEmotions, null, tint = Color.White.copy(alpha = 0.6f))
                         }
                         TextField(
                             value = input,
                             onValueChange = { input = it },
                             modifier = Modifier.weight(1f),
-                            placeholder = {
-                                Text("Message", color = Color.White.copy(alpha = 0.4f))
-                            },
+                            placeholder = { Text("Message", color = Color.White.copy(alpha = 0.4f)) },
                             colors = TextFieldDefaults.colors(
                                 focusedContainerColor = Color.Transparent,
                                 unfocusedContainerColor = Color.Transparent,
@@ -194,21 +309,10 @@ fun ChatScreen(
                             )
                         )
                         IconButton(onClick = { showAttach = !showAttach }) {
-                            Icon(
-                                Icons.Default.AttachFile,
-                                contentDescription = "Attach",
-                                tint = Color.White.copy(alpha = 0.6f)
-                            )
+                            Icon(Icons.Default.AttachFile, null, tint = Color.White.copy(alpha = 0.6f))
                         }
-                        IconButton(onClick = {
-                            showAttach = false
-                            viewModel.sendMessage("[Camera]")
-                        }) {
-                            Icon(
-                                Icons.Default.CameraAlt,
-                                contentDescription = "Camera",
-                                tint = Color.White.copy(alpha = 0.6f)
-                            )
+                        IconButton(onClick = { launchCamera() }) {
+                            Icon(Icons.Default.CameraAlt, null, tint = Color.White.copy(alpha = 0.6f))
                         }
                     }
                     Spacer(modifier = Modifier.width(6.dp))
@@ -228,7 +332,7 @@ fun ChatScreen(
                     ) {
                         Icon(
                             if (input.isBlank()) Icons.Default.Mic else Icons.AutoMirrored.Filled.Send,
-                            contentDescription = if (input.isBlank()) "Voice" else "Send",
+                            contentDescription = null,
                             tint = Color.Black
                         )
                     }
@@ -238,49 +342,64 @@ fun ChatScreen(
     ) { padding ->
         LazyColumn(
             state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .background(ChatBg)
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxSize().padding(padding).background(ChatBg).padding(horizontal = 10.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             items(messages, key = { it.id }) { message ->
-                MessageBubble(
-                    message = message,
-                    isMine = message.senderId == currentUid
-                )
+                MessageBubble(message = message, isMine = message.senderId == currentUid)
             }
         }
     }
 }
 
+private fun sendCurrentLocation(context: android.content.Context, viewModel: ChatViewModel) {
+    try {
+        val lm = context.getSystemService(android.content.Context.LOCATION_SERVICE) as LocationManager
+        val loc: Location? = try {
+            lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                ?: lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+        } catch (_: SecurityException) {
+            null
+        }
+        if (loc != null) {
+            viewModel.sendLocation(loc.latitude, loc.longitude)
+        } else {
+            viewModel.sendMessage("📍 Location unavailable — enable GPS")
+        }
+    } catch (_: Exception) {
+        viewModel.sendMessage("📍 Location error")
+    }
+}
+
 @Composable
-private fun AttachPanel(onPick: (String) -> Unit) {
+private fun AttachPanel(
+    onGallery: () -> Unit,
+    onVideo: () -> Unit,
+    onCamera: () -> Unit,
+    onDocument: () -> Unit,
+    onLocation: () -> Unit,
+    onContact: () -> Unit
+) {
     val items = listOf(
-        Triple(Icons.Default.Image, "Gallery", Color(0xFF7C4DFF)),
-        Triple(Icons.Default.CameraAlt, "Camera", Color(0xFFFF4081)),
-        Triple(Icons.Default.LocationOn, "Location", Color(0xFF1DE9B6)),
-        Triple(Icons.Default.Person, "Contact", Color(0xFF448AFF)),
-        Triple(Icons.Default.Description, "Document", Color(0xFF7C4DFF)),
-        Triple(Icons.Default.Add, "Poll", Color(0xFFFFAB00))
+        Triple(Icons.Default.Image, "Gallery", onGallery to Color(0xFF7C4DFF)),
+        Triple(Icons.Default.CameraAlt, "Camera", onCamera to Color(0xFFFF4081)),
+        Triple(Icons.Default.LocationOn, "Location", onLocation to Color(0xFF1DE9B6)),
+        Triple(Icons.Default.Person, "Contact", onContact to Color(0xFF448AFF)),
+        Triple(Icons.Default.Description, "Document", onDocument to Color(0xFF7C4DFF)),
+        Triple(Icons.Default.Videocam, "Video", onVideo to Color(0xFFFF6D00))
     )
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
         horizontalArrangement = Arrangement.SpaceEvenly
     ) {
-        items.forEach { (icon, label, color) ->
+        items.forEach { (icon, label, pair) ->
+            val (onClick, color) = pair
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.clickable { onPick(label) }
+                modifier = Modifier.clickable(onClick = onClick)
             ) {
                 Box(
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clip(CircleShape)
-                        .background(color),
+                    modifier = Modifier.size(52.dp).clip(CircleShape).background(color),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(icon, contentDescription = label, tint = Color.White)
@@ -298,6 +417,13 @@ private fun MessageBubble(message: Message, isMine: Boolean) {
     val time = message.createdAt?.let {
         SimpleDateFormat("h:mm a", Locale.getDefault()).format(it)
     } ?: ""
+    val body = when {
+        message.deletedForEveryone -> "This message was deleted"
+        message.type == MessageType.IMAGE -> message.text ?: "📷 Photo"
+        message.type == MessageType.VIDEO -> message.text ?: "🎬 Video"
+        message.type == MessageType.DOCUMENT -> message.fileName ?: message.text ?: "📄 Document"
+        else -> message.text.orEmpty()
+    }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -308,8 +434,7 @@ private fun MessageBubble(message: Message, isMine: Boolean) {
                 .widthIn(max = 300.dp)
                 .clip(
                     RoundedCornerShape(
-                        topStart = 12.dp,
-                        topEnd = 12.dp,
+                        topStart = 12.dp, topEnd = 12.dp,
                         bottomStart = if (isMine) 12.dp else 2.dp,
                         bottomEnd = if (isMine) 2.dp else 12.dp
                     )
@@ -317,17 +442,17 @@ private fun MessageBubble(message: Message, isMine: Boolean) {
                 .background(bg)
                 .padding(horizontal = 10.dp, vertical = 6.dp)
         ) {
-            Text(
-                text = when {
-                    message.deletedForEveryone -> "This message was deleted"
-                    else -> message.text.orEmpty()
-                },
-                color = Color.White,
-                style = MaterialTheme.typography.bodyLarge
-            )
+            Text(body, color = Color.White, style = MaterialTheme.typography.bodyLarge)
+            if (message.mediaUrl != null && message.type != MessageType.TEXT) {
+                Text(
+                    message.mediaUrl.take(40) + "…",
+                    color = Color(0xFF53BDEB),
+                    fontSize = 12.sp
+                )
+            }
             if (time.isNotBlank()) {
                 Text(
-                    text = time,
+                    time,
                     color = Color.White.copy(alpha = 0.55f),
                     fontSize = 11.sp,
                     modifier = Modifier.align(Alignment.End)
