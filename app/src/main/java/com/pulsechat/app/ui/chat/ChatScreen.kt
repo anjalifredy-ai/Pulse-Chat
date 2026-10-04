@@ -202,30 +202,43 @@ fun ChatScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
                     IconButton(onClick = {
                         callPermission.launch(arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO))
                         viewModel.startVideoCall()
-                    }) { Icon(Icons.Default.Videocam, "Video") }
+                    }) { Icon(Icons.Default.Videocam, contentDescription = "Video") }
                     IconButton(onClick = {
                         callPermission.launch(arrayOf(Manifest.permission.RECORD_AUDIO))
                         viewModel.startVoiceCall()
-                    }) { Icon(Icons.Default.Call, "Call") }
+                    }) { Icon(Icons.Default.Call, contentDescription = "Call") }
                 }
             )
         },
         bottomBar = {
             Column(modifier = Modifier.background(BarBg)) {
                 if (uploading || recording) {
-                    Row(Modifier = Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.Center) {
-                        if (uploading) CircularProgressIndicator(Modifier = Modifier.size(20.dp), color = PulseGreen)
-                        Spacer(modifier = Modifier.width(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (uploading) {
+                            CircularProgressIndicator(
+                                color = PulseGreen,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
                         Text(
-                            if (recording) "Recording… release to send" else "Uploading…",
-                            color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp
+                            text = if (recording) "Recording… release to send" else "Uploading…",
+                            color = Color.White.copy(alpha = 0.7f),
+                            fontSize = 13.sp
                         )
                     }
                 }
@@ -237,23 +250,30 @@ fun ChatScreen(
                         onDocument = { showAttach = false; documentLauncher.launch(arrayOf("application/pdf", "*/*")) },
                         onLocation = {
                             showAttach = false
-                            if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED)
+                            if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
                                 sendCurrentLocation(context, viewModel)
-                            else locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                            } else {
+                                locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                            }
                         },
                         onContact = { showAttach = false; contactLauncher.launch(null) }
                     )
                 }
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 6.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(
-                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(24.dp)).background(InputBg),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(24.dp))
+                            .background(InputBg),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         IconButton(onClick = {}) {
-                            Icon(Icons.Default.EmojiEmotions, null, tint = Color.White.copy(alpha = 0.6f))
+                            Icon(Icons.Default.EmojiEmotions, contentDescription = null, tint = Color.White.copy(alpha = 0.6f))
                         }
                         TextField(
                             value = input,
@@ -271,10 +291,10 @@ fun ChatScreen(
                             )
                         )
                         IconButton(onClick = { showAttach = !showAttach }) {
-                            Icon(Icons.Default.AttachFile, null, tint = Color.White.copy(alpha = 0.6f))
+                            Icon(Icons.Default.AttachFile, contentDescription = null, tint = Color.White.copy(alpha = 0.6f))
                         }
                         IconButton(onClick = { launchCamera() }) {
-                            Icon(Icons.Default.CameraAlt, null, tint = Color.White.copy(alpha = 0.6f))
+                            Icon(Icons.Default.CameraAlt, contentDescription = null, tint = Color.White.copy(alpha = 0.6f))
                         }
                     }
                     Spacer(modifier = Modifier.width(6.dp))
@@ -319,8 +339,9 @@ fun ChatScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            if (input.isBlank()) Icons.Default.Mic else Icons.AutoMirrored.Filled.Send,
-                            null, tint = Color.Black
+                            imageVector = if (input.isBlank()) Icons.Default.Mic else Icons.AutoMirrored.Filled.Send,
+                            contentDescription = null,
+                            tint = Color.Black
                         )
                     }
                 }
@@ -329,7 +350,11 @@ fun ChatScreen(
     ) { padding ->
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize().padding(padding).background(ChatBg).padding(horizontal = 10.dp, vertical = 8.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .background(ChatBg)
+                .padding(horizontal = 10.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             items(messages, key = { it.id }) { message ->
@@ -349,7 +374,9 @@ private fun sendCurrentLocation(context: android.content.Context, viewModel: Cha
         val loc: Location? = try {
             lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)
                 ?: lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
-        } catch (_: SecurityException) { null }
+        } catch (_: SecurityException) {
+            null
+        }
         if (loc != null) viewModel.sendLocation(loc.latitude, loc.longitude)
         else viewModel.sendMessage("📍 Location unavailable — enable GPS")
     } catch (_: Exception) {
@@ -359,8 +386,12 @@ private fun sendCurrentLocation(context: android.content.Context, viewModel: Cha
 
 @Composable
 private fun AttachPanel(
-    onGallery: () -> Unit, onVideo: () -> Unit, onCamera: () -> Unit,
-    onDocument: () -> Unit, onLocation: () -> Unit, onContact: () -> Unit
+    onGallery: () -> Unit,
+    onVideo: () -> Unit,
+    onCamera: () -> Unit,
+    onDocument: () -> Unit,
+    onLocation: () -> Unit,
+    onContact: () -> Unit
 ) {
     val items = listOf(
         Triple(Icons.Default.Image, "Gallery", onGallery to Color(0xFF7C4DFF)),
@@ -370,12 +401,21 @@ private fun AttachPanel(
         Triple(Icons.Default.Description, "Document", onDocument to Color(0xFF7C4DFF)),
         Triple(Icons.Default.Videocam, "Video", onVideo to Color(0xFFFF6D00))
     )
-    Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly
+    ) {
         items.forEach { (icon, label, pair) ->
             val (onClick, color) = pair
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable(onClick = onClick)) {
-                Box(modifier = Modifier.size(52.dp).clip(CircleShape).background(color), contentAlignment = Alignment.Center) {
-                    Icon(icon, label, tint = Color.White)
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.clickable(onClick = onClick)
+            ) {
+                Box(
+                    modifier = Modifier.size(52.dp).clip(CircleShape).background(color),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(icon, contentDescription = label, tint = Color.White)
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(label, color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp)
@@ -402,11 +442,21 @@ private fun MessageBubble(
         else -> message.text.orEmpty()
     }
 
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = if (isMine) Arrangement.End else Arrangement.Start) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = if (isMine) Arrangement.End else Arrangement.Start
+    ) {
         Column(
             modifier = Modifier
                 .widthIn(max = 300.dp)
-                .clip(RoundedCornerShape(12.dp, 12.dp, if (isMine) 2.dp else 12.dp, if (isMine) 12.dp else 2.dp))
+                .clip(
+                    RoundedCornerShape(
+                        topStart = 12.dp,
+                        topEnd = 12.dp,
+                        bottomStart = if (isMine) 2.dp else 12.dp,
+                        bottomEnd = if (isMine) 12.dp else 2.dp
+                    )
+                )
                 .background(bg)
                 .then(
                     if (message.type == MessageType.DOCUMENT && !message.mediaUrl.isNullOrBlank()) {
@@ -420,11 +470,15 @@ private fun MessageBubble(
             Text(body, color = Color.White, style = MaterialTheme.typography.bodyLarge)
             if (!message.mediaUrl.isNullOrBlank() && message.type != MessageType.TEXT) {
                 Text(
-                    if (message.type == MessageType.DOCUMENT) "Tap to open" else message.mediaUrl.take(36) + "…",
-                    color = TickBlue, fontSize = 12.sp
+                    text = if (message.type == MessageType.DOCUMENT) "Tap to open" else message.mediaUrl.take(36) + "…",
+                    color = TickBlue,
+                    fontSize = 12.sp
                 )
             }
-            Row(modifier = Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier.align(Alignment.End),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 if (time.isNotBlank()) {
                     Text(time, color = Color.White.copy(alpha = 0.55f), fontSize = 11.sp)
                 }

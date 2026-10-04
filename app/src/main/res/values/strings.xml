@@ -17,6 +17,9 @@
     <string name="logout">Log out</string>
     <string name="my_status">My status</string>
     <string name="add_status">Tap to add status update</string>
-    <!-- Web client ID from Firebase (client_type 3) — required for Google Sign-In ID token -->
+    <string name="profile_setup">Set up your profile</string>
+    <string name="display_name">Display name</string>
+    <string name="about_hint">About</string>
+    <string name="save_profile">Save</string>
     <string name="default_web_client_id" translatable="false">225740234992-f1lr0gucd5ktb3vu26ee06no1et0hhmd.apps.googleusercontent.com</string>
 </resources>
