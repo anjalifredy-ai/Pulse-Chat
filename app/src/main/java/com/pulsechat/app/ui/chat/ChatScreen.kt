@@ -33,6 +33,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.Image
@@ -40,12 +41,14 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
@@ -69,6 +72,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.pulsechat.app.data.model.Message
 import com.pulsechat.app.data.model.MessageType
 import com.pulsechat.app.media.VoiceRecorder
 import com.pulsechat.app.ui.components.CircleAvatar
@@ -103,6 +107,7 @@ fun ChatScreen(
     var showAttach by remember { mutableStateOf(false) }
     var cameraUri by remember { mutableStateOf<Uri?>(null) }
     var recording by remember { mutableStateOf(false) }
+    var selectedMessage by remember { mutableStateOf<Message?>(null) }
     val voiceRecorder = remember { VoiceRecorder(context) }
     val listState = rememberLazyListState()
 
@@ -354,10 +359,50 @@ fun ChatScreen(
                 MessageBubble(
                     message = message,
                     isMine = message.senderId == currentUid,
-                    onOpenDocument = onOpenDocument
+                    onOpenDocument = onOpenDocument,
+                    onLongPress = { selectedMessage = it }
                 )
             }
         }
+    }
+
+    // WhatsApp-style delete dialog on long-press
+    selectedMessage?.let { msg ->
+        val isMine = msg.senderId == currentUid
+        AlertDialog(
+            onDismissRequest = { selectedMessage = null },
+            icon = { Icon(Icons.Default.Delete, contentDescription = null, tint = Color(0xFFFF4D6A)) },
+            title = { Text("Delete message?") },
+            text = {
+                Text(
+                    if (isMine) "Choose how to delete this message."
+                    else "This will remove the message from your chat only."
+                )
+            },
+            confirmButton = {
+                Column {
+                    if (isMine && !msg.deletedForEveryone) {
+                        TextButton(onClick = {
+                            viewModel.deleteForEveryone(msg.id)
+                            selectedMessage = null
+                        }) {
+                            Text("Delete for everyone", color = Color(0xFFFF4D6A))
+                        }
+                    }
+                    TextButton(onClick = {
+                        viewModel.deleteForMe(msg.id)
+                        selectedMessage = null
+                    }) {
+                        Text("Delete for me", color = Color(0xFFFF4D6A))
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { selectedMessage = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 
