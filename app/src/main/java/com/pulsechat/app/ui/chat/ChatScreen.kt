@@ -10,6 +10,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,11 +31,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.LocationOn
@@ -63,6 +65,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -71,7 +74,9 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.pulsechat.app.data.model.Message
+import com.pulsechat.app.data.model.MessageStatus
 import com.pulsechat.app.data.model.MessageType
+import com.pulsechat.app.media.VoiceRecorder
 import com.pulsechat.app.ui.components.CircleAvatar
 import com.pulsechat.app.ui.theme.PulseGreen
 import java.io.File
@@ -81,6 +86,7 @@ import java.util.Locale
 private val ChatBg = Color(0xFF0B141A)
 private val BarBg = Color(0xFF1F2C34)
 private val InputBg = Color(0xFF2A3942)
+private val TickBlue = Color(0xFF53BDEB)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -90,6 +96,7 @@ fun ChatScreen(
     onOpenContact: (String) -> Unit,
     onVoiceCall: (String) -> Unit = {},
     onVideoCall: (String) -> Unit = {},
+    onOpenDocument: (url: String, name: String) -> Unit = { _, _ -> },
     viewModel: ChatViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -104,12 +111,13 @@ fun ChatScreen(
     var input by remember { mutableStateOf("") }
     var showAttach by remember { mutableStateOf(false) }
     var cameraUri by remember { mutableStateOf<Uri?>(null) }
+    var recording by remember { mutableStateOf(false) }
+    val voiceRecorder = remember { VoiceRecorder(context) }
     val listState = rememberLazyListState()
 
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
     }
-
     LaunchedEffect(startedCallId) {
         startedCallId?.let { id ->
             onVoiceCall(id)
@@ -117,55 +125,36 @@ fun ChatScreen(
         }
     }
 
-    val galleryLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetContent()
-    ) { uri ->
+    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { viewModel.sendMedia(it, MessageType.IMAGE) }
     }
-
-    val videoLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetContent()
-    ) { uri ->
+    val videoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { viewModel.sendMedia(it, MessageType.VIDEO) }
     }
-
-    val documentLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri ->
+    val documentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let {
             val name = it.lastPathSegment ?: "document.pdf"
             viewModel.sendMedia(it, MessageType.DOCUMENT, name)
         }
     }
-
-    val cameraLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.TakePicture()
-    ) { ok ->
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         if (ok) cameraUri?.let { viewModel.sendMedia(it, MessageType.IMAGE) }
     }
-
-    val contactLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickContact()
-    ) { uri ->
+    val contactLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickContact()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         try {
-            val cursor = context.contentResolver.query(uri, null, null, null, null)
-            cursor?.use {
-                if (it.moveToFirst()) {
-                    val nameIdx = it.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME)
-                    val idIdx = it.getColumnIndex(ContactsContract.Contacts._ID)
-                    val name = if (nameIdx >= 0) it.getString(nameIdx) else "Contact"
-                    val contactId = if (idIdx >= 0) it.getString(idIdx) else null
+            context.contentResolver.query(uri, null, null, null, null)?.use { c ->
+                if (c.moveToFirst()) {
+                    val nameIdx = c.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME)
+                    val idIdx = c.getColumnIndex(ContactsContract.Contacts._ID)
+                    val name = if (nameIdx >= 0) c.getString(nameIdx) else "Contact"
+                    val contactId = if (idIdx >= 0) c.getString(idIdx) else null
                     var phone = ""
                     if (contactId != null) {
-                        val phones = context.contentResolver.query(
-                            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-                            null,
-                            "${ContactsContract.CommonDataKinds.Phone.CONTACT_ID}=?",
-                            arrayOf(contactId),
-                            null
-                        )
-                        phones?.use { p ->
+                        context.contentResolver.query(
+                            ContactsContract.CommonDataKinds.Phone.CONTENT_URI, null,
+                            "${ContactsContract.CommonDataKinds.Phone.CONTACT_ID}=?", arrayOf(contactId), null
+                        )?.use { p ->
                             if (p.moveToFirst()) {
                                 val pIdx = p.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
                                 if (pIdx >= 0) phone = p.getString(pIdx)
@@ -177,20 +166,11 @@ fun ChatScreen(
             }
         } catch (_: Exception) { }
     }
-
-    val locationPermission = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) sendCurrentLocation(context, viewModel)
+    val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { g ->
+        if (g) sendCurrentLocation(context, viewModel)
     }
-
-    val callPermission = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { results ->
-        if (results.values.any { it }) {
-            viewModel.startVoiceCall()
-        }
-    }
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    val callPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
 
     fun launchCamera() {
         val file = File(context.cacheDir, "cam_${System.currentTimeMillis()}.jpg")
@@ -204,10 +184,8 @@ fun ChatScreen(
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BarBg,
-                    titleContentColor = Color.White,
-                    navigationIconContentColor = Color.White,
-                    actionIconContentColor = Color.White
+                    containerColor = BarBg, titleContentColor = Color.White,
+                    navigationIconContentColor = Color.White, actionIconContentColor = Color.White
                 ),
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -216,47 +194,39 @@ fun ChatScreen(
                         Column {
                             Text(title, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1)
                             Text(
-                                if (title.contains("You", ignoreCase = true)) "Message yourself"
-                                else "online",
-                                fontSize = 12.sp,
-                                color = Color.White.copy(alpha = 0.6f)
+                                if (title.contains("You", true)) "Message yourself" else "online",
+                                fontSize = 12.sp, color = Color.White.copy(alpha = 0.6f)
                             )
                         }
                     }
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                     }
                 },
                 actions = {
                     IconButton(onClick = {
-                        callPermission.launch(
-                            arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
-                        )
+                        callPermission.launch(arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO))
                         viewModel.startVideoCall()
-                    }) {
-                        Icon(Icons.Default.Videocam, contentDescription = "Video")
-                    }
+                    }) { Icon(Icons.Default.Videocam, "Video") }
                     IconButton(onClick = {
                         callPermission.launch(arrayOf(Manifest.permission.RECORD_AUDIO))
                         viewModel.startVoiceCall()
-                    }) {
-                        Icon(Icons.Default.Call, contentDescription = "Call")
-                    }
+                    }) { Icon(Icons.Default.Call, "Call") }
                 }
             )
         },
         bottomBar = {
             Column(modifier = Modifier.background(BarBg)) {
-                if (uploading) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(8.dp),
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = PulseGreen)
+                if (uploading || recording) {
+                    Row(Modifier = Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.Center) {
+                        if (uploading) CircularProgressIndicator(Modifier = Modifier.size(20.dp), color = PulseGreen)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Uploading…", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
+                        Text(
+                            if (recording) "Recording… release to send" else "Uploading…",
+                            color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp
+                        )
                     }
                 }
                 if (showAttach) {
@@ -264,20 +234,12 @@ fun ChatScreen(
                         onGallery = { showAttach = false; galleryLauncher.launch("image/*") },
                         onVideo = { showAttach = false; videoLauncher.launch("video/*") },
                         onCamera = { showAttach = false; launchCamera() },
-                        onDocument = {
-                            showAttach = false
-                            documentLauncher.launch(arrayOf("application/pdf", "*/*"))
-                        },
+                        onDocument = { showAttach = false; documentLauncher.launch(arrayOf("application/pdf", "*/*")) },
                         onLocation = {
                             showAttach = false
-                            if (ContextCompat.checkSelfPermission(
-                                    context, Manifest.permission.ACCESS_FINE_LOCATION
-                                ) == PackageManager.PERMISSION_GRANTED
-                            ) {
+                            if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED)
                                 sendCurrentLocation(context, viewModel)
-                            } else {
-                                locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-                            }
+                            else locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                         },
                         onContact = { showAttach = false; contactLauncher.launch(null) }
                     )
@@ -290,7 +252,7 @@ fun ChatScreen(
                         modifier = Modifier.weight(1f).clip(RoundedCornerShape(24.dp)).background(InputBg),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(onClick = { }) {
+                        IconButton(onClick = {}) {
                             Icon(Icons.Default.EmojiEmotions, null, tint = Color.White.copy(alpha = 0.6f))
                         }
                         TextField(
@@ -320,20 +282,45 @@ fun ChatScreen(
                         modifier = Modifier
                             .size(48.dp)
                             .clip(CircleShape)
-                            .background(PulseGreen)
-                            .clickable {
-                                if (input.isNotBlank()) {
-                                    viewModel.sendMessage(input.trim())
-                                    input = ""
-                                    showAttach = false
+                            .background(if (recording) Color.Red else PulseGreen)
+                            .then(
+                                if (input.isBlank()) {
+                                    Modifier.pointerInput(Unit) {
+                                        detectTapGestures(
+                                            onPress = {
+                                                if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
+                                                    != PackageManager.PERMISSION_GRANTED
+                                                ) {
+                                                    micPermission.launch(Manifest.permission.RECORD_AUDIO)
+                                                    return@detectTapGestures
+                                                }
+                                                try {
+                                                    voiceRecorder.start()
+                                                    recording = true
+                                                    tryAwaitRelease()
+                                                } finally {
+                                                    recording = false
+                                                    val result = voiceRecorder.stop()
+                                                    if (result != null) {
+                                                        viewModel.sendVoiceFile(result.first, result.second)
+                                                    }
+                                                }
+                                            }
+                                        )
+                                    }
+                                } else {
+                                    Modifier.clickable {
+                                        viewModel.sendMessage(input.trim())
+                                        input = ""
+                                        showAttach = false
+                                    }
                                 }
-                            },
+                            ),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             if (input.isBlank()) Icons.Default.Mic else Icons.AutoMirrored.Filled.Send,
-                            contentDescription = null,
-                            tint = Color.Black
+                            null, tint = Color.Black
                         )
                     }
                 }
@@ -346,7 +333,11 @@ fun ChatScreen(
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             items(messages, key = { it.id }) { message ->
-                MessageBubble(message = message, isMine = message.senderId == currentUid)
+                MessageBubble(
+                    message = message,
+                    isMine = message.senderId == currentUid,
+                    onOpenDocument = onOpenDocument
+                )
             }
         }
     }
@@ -358,14 +349,9 @@ private fun sendCurrentLocation(context: android.content.Context, viewModel: Cha
         val loc: Location? = try {
             lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)
                 ?: lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
-        } catch (_: SecurityException) {
-            null
-        }
-        if (loc != null) {
-            viewModel.sendLocation(loc.latitude, loc.longitude)
-        } else {
-            viewModel.sendMessage("📍 Location unavailable — enable GPS")
-        }
+        } catch (_: SecurityException) { null }
+        if (loc != null) viewModel.sendLocation(loc.latitude, loc.longitude)
+        else viewModel.sendMessage("📍 Location unavailable — enable GPS")
     } catch (_: Exception) {
         viewModel.sendMessage("📍 Location error")
     }
@@ -373,12 +359,8 @@ private fun sendCurrentLocation(context: android.content.Context, viewModel: Cha
 
 @Composable
 private fun AttachPanel(
-    onGallery: () -> Unit,
-    onVideo: () -> Unit,
-    onCamera: () -> Unit,
-    onDocument: () -> Unit,
-    onLocation: () -> Unit,
-    onContact: () -> Unit
+    onGallery: () -> Unit, onVideo: () -> Unit, onCamera: () -> Unit,
+    onDocument: () -> Unit, onLocation: () -> Unit, onContact: () -> Unit
 ) {
     val items = listOf(
         Triple(Icons.Default.Image, "Gallery", onGallery to Color(0xFF7C4DFF)),
@@ -388,21 +370,12 @@ private fun AttachPanel(
         Triple(Icons.Default.Description, "Document", onDocument to Color(0xFF7C4DFF)),
         Triple(Icons.Default.Videocam, "Video", onVideo to Color(0xFFFF6D00))
     )
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(16.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly
-    ) {
+    Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
         items.forEach { (icon, label, pair) ->
             val (onClick, color) = pair
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.clickable(onClick = onClick)
-            ) {
-                Box(
-                    modifier = Modifier.size(52.dp).clip(CircleShape).background(color),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(icon, contentDescription = label, tint = Color.White)
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable(onClick = onClick)) {
+                Box(modifier = Modifier.size(52.dp).clip(CircleShape).background(color), contentAlignment = Alignment.Center) {
+                    Icon(icon, label, tint = Color.White)
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(label, color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp)
@@ -412,51 +385,58 @@ private fun AttachPanel(
 }
 
 @Composable
-private fun MessageBubble(message: Message, isMine: Boolean) {
+private fun MessageBubble(
+    message: Message,
+    isMine: Boolean,
+    onOpenDocument: (String, String) -> Unit
+) {
     val bg = if (isMine) Color(0xFF005C4B) else Color(0xFF1F2C34)
-    val time = message.createdAt?.let {
-        SimpleDateFormat("h:mm a", Locale.getDefault()).format(it)
-    } ?: ""
+    val time = message.createdAt?.let { SimpleDateFormat("h:mm a", Locale.getDefault()).format(it) } ?: ""
+    val isRead = message.status == MessageStatus.READ || message.readBy.isNotEmpty()
     val body = when {
         message.deletedForEveryone -> "This message was deleted"
         message.type == MessageType.IMAGE -> message.text ?: "📷 Photo"
         message.type == MessageType.VIDEO -> message.text ?: "🎬 Video"
+        message.type == MessageType.VOICE || message.type == MessageType.AUDIO -> "🎤 Voice message"
         message.type == MessageType.DOCUMENT -> message.fileName ?: message.text ?: "📄 Document"
         else -> message.text.orEmpty()
     }
 
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = if (isMine) Arrangement.End else Arrangement.Start
-    ) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = if (isMine) Arrangement.End else Arrangement.Start) {
         Column(
             modifier = Modifier
                 .widthIn(max = 300.dp)
-                .clip(
-                    RoundedCornerShape(
-                        topStart = 12.dp, topEnd = 12.dp,
-                        bottomStart = if (isMine) 12.dp else 2.dp,
-                        bottomEnd = if (isMine) 2.dp else 12.dp
-                    )
-                )
+                .clip(RoundedCornerShape(12.dp, 12.dp, if (isMine) 2.dp else 12.dp, if (isMine) 12.dp else 2.dp))
                 .background(bg)
+                .then(
+                    if (message.type == MessageType.DOCUMENT && !message.mediaUrl.isNullOrBlank()) {
+                        Modifier.clickable {
+                            onOpenDocument(message.mediaUrl!!, message.fileName ?: "Document")
+                        }
+                    } else Modifier
+                )
                 .padding(horizontal = 10.dp, vertical = 6.dp)
         ) {
             Text(body, color = Color.White, style = MaterialTheme.typography.bodyLarge)
-            if (message.mediaUrl != null && message.type != MessageType.TEXT) {
+            if (!message.mediaUrl.isNullOrBlank() && message.type != MessageType.TEXT) {
                 Text(
-                    message.mediaUrl.take(40) + "…",
-                    color = Color(0xFF53BDEB),
-                    fontSize = 12.sp
+                    if (message.type == MessageType.DOCUMENT) "Tap to open" else message.mediaUrl.take(36) + "…",
+                    color = TickBlue, fontSize = 12.sp
                 )
             }
-            if (time.isNotBlank()) {
-                Text(
-                    time,
-                    color = Color.White.copy(alpha = 0.55f),
-                    fontSize = 11.sp,
-                    modifier = Modifier.align(Alignment.End)
-                )
+            Row(modifier = Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) {
+                if (time.isNotBlank()) {
+                    Text(time, color = Color.White.copy(alpha = 0.55f), fontSize = 11.sp)
+                }
+                if (isMine) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        imageVector = if (isRead) Icons.Default.DoneAll else Icons.Default.Done,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = if (isRead) TickBlue else Color.White.copy(alpha = 0.55f)
+                    )
+                }
             }
         }
     }
