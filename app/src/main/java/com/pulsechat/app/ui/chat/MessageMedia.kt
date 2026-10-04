@@ -3,6 +3,7 @@ package com.pulsechat.app.ui.chat
 import android.media.MediaPlayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -52,13 +54,15 @@ fun MessageBubble(
     message: Message,
     isMine: Boolean,
     onOpenDocument: (String, String) -> Unit,
-    onOpenImage: (String) -> Unit = {}
+    onOpenImage: (String) -> Unit = {},
+    onLongPress: (Message) -> Unit = {}
 ) {
     val bg = if (isMine) Color(0xFF2A1F4D) else Color(0xFF1C1C22)
     val time = message.createdAt?.let {
         SimpleDateFormat("h:mm a", Locale.getDefault()).format(it)
     } ?: ""
     val isRead = message.status == MessageStatus.READ || message.readBy.isNotEmpty()
+    val deleted = message.deletedForEveryone
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -76,102 +80,116 @@ fun MessageBubble(
                     )
                 )
                 .background(bg)
+                .pointerInput(message.id) {
+                    detectTapGestures(
+                        onLongPress = { onLongPress(message) }
+                    )
+                }
                 .padding(6.dp)
         ) {
-            when (message.type) {
-                MessageType.IMAGE -> {
-                    val url = message.mediaUrl
-                    if (!url.isNullOrBlank()) {
-                        AsyncImage(
-                            model = url,
-                            contentDescription = "Photo",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(220.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable { onOpenImage(url) }
-                        )
-                    }
-                    if (!message.text.isNullOrBlank() && message.text != "📷 Photo") {
-                        Text(
-                            message.text!!,
-                            color = Color.White,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
-                        )
-                    }
-                }
-
-                MessageType.VOICE, MessageType.AUDIO -> {
-                    VoiceBubble(url = message.mediaUrl, durationMs = message.mediaDuration)
-                }
-
-                MessageType.DOCUMENT -> {
-                    Row(
-                        modifier = Modifier
-                            .clickable {
-                                message.mediaUrl?.let {
-                                    onOpenDocument(it, message.fileName ?: "Document")
-                                }
-                            }
-                            .padding(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.12f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.Description, contentDescription = null, tint = Color.White)
-                        }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text(
-                                message.fileName ?: "Document",
-                                color = Color.White,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Text("Tap to open", color = TickBlue, fontSize = 12.sp)
-                        }
-                    }
-                }
-
-                MessageType.VIDEO -> {
-                    val url = message.mediaUrl
-                    if (!url.isNullOrBlank()) {
-                        Box {
+            if (deleted) {
+                Text(
+                    "This message was deleted",
+                    color = Color.White.copy(alpha = 0.55f),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            } else {
+                when (message.type) {
+                    MessageType.IMAGE -> {
+                        val url = message.mediaUrl
+                        if (!url.isNullOrBlank()) {
                             AsyncImage(
                                 model = url,
-                                contentDescription = "Video",
+                                contentDescription = "Photo",
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(200.dp)
+                                    .height(220.dp)
                                     .clip(RoundedCornerShape(12.dp))
                                     .clickable { onOpenImage(url) }
                             )
+                        }
+                        if (!message.text.isNullOrBlank() && message.text != "📷 Photo") {
                             Text(
-                                "▶ Video",
+                                message.text!!,
                                 color = Color.White,
-                                modifier = Modifier
-                                    .align(Alignment.Center)
-                                    .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(8.dp))
-                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
                             )
                         }
                     }
-                }
 
-                else -> {
-                    Text(
-                        text = message.text.orEmpty().ifBlank { "Message" },
-                        color = Color.White,
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
+                    MessageType.VOICE, MessageType.AUDIO -> {
+                        VoiceBubble(url = message.mediaUrl, durationMs = message.mediaDuration)
+                    }
+
+                    MessageType.DOCUMENT -> {
+                        Row(
+                            modifier = Modifier
+                                .clickable {
+                                    message.mediaUrl?.let {
+                                        onOpenDocument(it, message.fileName ?: "Document")
+                                    }
+                                }
+                                .padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White.copy(alpha = 0.12f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Description, contentDescription = null, tint = Color.White)
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    message.fileName ?: "Document",
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Text("Tap to open", color = TickBlue, fontSize = 12.sp)
+                            }
+                        }
+                    }
+
+                    MessageType.VIDEO -> {
+                        val url = message.mediaUrl
+                        if (!url.isNullOrBlank()) {
+                            Box {
+                                AsyncImage(
+                                    model = url,
+                                    contentDescription = "Video",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(200.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable { onOpenImage(url) }
+                                )
+                                Text(
+                                    "▶ Video",
+                                    color = Color.White,
+                                    modifier = Modifier
+                                        .align(Alignment.Center)
+                                        .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(8.dp))
+                                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    else -> {
+                        Text(
+                            text = message.text.orEmpty().ifBlank { "Message" },
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
                 }
             }
 
