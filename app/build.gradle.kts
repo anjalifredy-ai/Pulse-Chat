@@ -16,13 +16,25 @@ android {
         applicationId = "com.pulsechat.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "1.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         vectorDrawables {
             useSupportLibrary = true
+        }
+    }
+
+    signingConfigs {
+        create("pulseDebug") {
+            val ks = file("pulse-debug.keystore")
+            if (ks.exists()) {
+                storeFile = ks
+                storePassword = "android"
+                keyAlias = "pulsechat"
+                keyPassword = "android"
+            }
         }
     }
 
@@ -37,6 +49,10 @@ android {
         }
         debug {
             isMinifyEnabled = false
+            val pulse = signingConfigs.findByName("pulseDebug")
+            if (pulse?.storeFile?.exists() == true) {
+                signingConfig = pulse
+            }
         }
     }
 
@@ -95,7 +111,6 @@ dependencies {
     implementation(libs.firebase.crashlytics)
     implementation(libs.firebase.analytics)
 
-    // Google Sign-In
     implementation("com.google.android.gms:play-services-auth:21.2.0")
 
     implementation(libs.coil.compose)
