@@ -11,12 +11,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -27,18 +30,15 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -63,6 +63,7 @@ import coil.compose.AsyncImage
 import com.pulsechat.app.data.model.StatusItem
 import com.pulsechat.app.data.model.StatusType
 import com.pulsechat.app.ui.components.CircleAvatar
+import com.pulsechat.app.ui.pulse.PulsePlayer
 import com.pulsechat.app.ui.theme.PulseBlue
 import com.pulsechat.app.ui.theme.PulsePurple
 import java.text.SimpleDateFormat
@@ -72,7 +73,6 @@ private val BgColors = listOf(
     "#5B8DEF", "#B14EFF", "#FF5C8A", "#FF8A3D", "#1DE9B6", "#0A0A0C"
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StatusTab(
     modifier: Modifier = Modifier,
@@ -86,6 +86,7 @@ fun StatusTab(
     var showComposer by remember { mutableStateOf(false) }
     var statusText by remember { mutableStateOf("") }
     var selectedColor by remember { mutableStateOf(BgColors[0]) }
+    var musicName by remember { mutableStateOf<String?>(null) }
     var viewerList by remember { mutableStateOf<List<StatusItem>?>(null) }
     var viewerIndex by remember { mutableIntStateOf(0) }
     var editItem by remember { mutableStateOf<StatusItem?>(null) }
@@ -96,16 +97,28 @@ fun StatusTab(
     val videoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         uri?.let { viewModel.postMediaStatus(it, StatusType.VIDEO) }
     }
+    val musicLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        if (uri != null) {
+            musicName = uri.lastPathSegment ?: "Music attached"
+        }
+    }
 
-    Box(modifier = modifier.fillMaxSize().background(Color(0xFF0A0A0C))) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color(0xFF0A0A0C))
+            .windowInsetsPadding(WindowInsets.statusBars)
+    ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            TopAppBar(
-                title = { Text("Status", fontWeight = FontWeight.Bold, color = Color.White) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF121218))
+            Text(
+                "Status",
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                fontSize = 22.sp,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
             )
 
             LazyColumn(modifier = Modifier.fillMaxSize()) {
-                // My status row
                 item {
                     Row(
                         modifier = Modifier
@@ -152,7 +165,7 @@ fun StatusTab(
                         Column(modifier = Modifier.weight(1f)) {
                             Text("My status", color = Color.White, fontWeight = FontWeight.SemiBold)
                             Text(
-                                if (myStatuses.isEmpty()) "Tap to add photo, video or text"
+                                if (myStatuses.isEmpty()) "Photo · Video · Text · Music"
                                 else "${myStatuses.size} update · tap to view",
                                 color = Color.White.copy(alpha = 0.55f),
                                 fontSize = 13.sp
@@ -237,7 +250,7 @@ fun StatusTab(
                             Text("No status yet", color = Color.White.copy(alpha = 0.6f))
                             Spacer(Modifier.height(8.dp))
                             Text(
-                                "Add a photo, video or text status.\nIt disappears after 24 hours.",
+                                "Add photo, video or text.\nDisappears after 24 hours.",
                                 color = Color.White.copy(alpha = 0.4f),
                                 textAlign = TextAlign.Center,
                                 fontSize = 13.sp
@@ -257,72 +270,146 @@ fun StatusTab(
         }
     }
 
-    // Text / edit composer
+    // Full edit page style composer
     if (showComposer || editItem != null) {
         val editing = editItem
-        AlertDialog(
+        Dialog(
             onDismissRequest = {
                 showComposer = false
                 editItem = null
+                musicName = null
             },
-            title = { Text(if (editing != null) "Edit status" else "Text status") },
-            text = {
-                Column {
-                    OutlinedTextField(
-                        value = if (editing != null) statusText else statusText,
-                        onValueChange = { statusText = it },
-                        placeholder = { Text("What's on your mind?") },
-                        modifier = Modifier.fillMaxWidth()
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        try {
+                            Color(android.graphics.Color.parseColor(selectedColor))
+                        } catch (_: Exception) {
+                            PulseBlue
+                        }
                     )
-                    Spacer(Modifier.height(12.dp))
-                    Text("Background", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        BgColors.forEach { hex ->
-                            val c = try {
-                                Color(android.graphics.Color.parseColor(hex))
-                            } catch (_: Exception) {
-                                PulseBlue
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .clip(CircleShape)
-                                    .background(c)
-                                    .then(
-                                        if (selectedColor == hex) Modifier.border(2.dp, Color.White, CircleShape)
-                                        else Modifier
-                                    )
-                                    .clickable { selectedColor = hex }
-                            )
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    if (statusText.isNotBlank()) {
-                        if (editing != null) {
-                            viewModel.editTextStatus(editing.id, statusText.trim(), selectedColor)
-                        } else {
-                            viewModel.postQuickTextStatus(statusText.trim(), selectedColor)
-                        }
-                        statusText = ""
+                    .padding(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = {
                         showComposer = false
                         editItem = null
+                    }) {
+                        Icon(Icons.Default.Close, null, tint = Color.White)
                     }
-                }) { Text(if (editing != null) "Save" else "Post") }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showComposer = false
-                    editItem = null
-                }) { Text("Cancel") }
+                    Text(
+                        if (editing != null) "Edit status" else "New status",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = {
+                        if (statusText.isNotBlank()) {
+                            val finalText = if (musicName != null) {
+                                "$statusText\n🎵 $musicName"
+                            } else statusText
+                            if (editing != null) {
+                                viewModel.editTextStatus(editing.id, finalText.trim(), selectedColor)
+                            } else {
+                                viewModel.postQuickTextStatus(finalText.trim(), selectedColor)
+                            }
+                            statusText = ""
+                            musicName = null
+                            showComposer = false
+                            editItem = null
+                        }
+                    }) {
+                        Text("Post", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Spacer(Modifier.weight(1f))
+                OutlinedTextField(
+                    value = statusText,
+                    onValueChange = { statusText = it },
+                    placeholder = { Text("Type a status…", color = Color.White.copy(0.5f)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color.White.copy(0.5f),
+                        unfocusedBorderColor = Color.White.copy(0.3f)
+                    )
+                )
+                Spacer(Modifier.height(16.dp))
+
+                Text("Background", color = Color.White.copy(0.8f), fontSize = 13.sp)
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    BgColors.forEach { hex ->
+                        val c = try {
+                            Color(android.graphics.Color.parseColor(hex))
+                        } catch (_: Exception) {
+                            PulseBlue
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(c)
+                                .then(
+                                    if (selectedColor == hex) Modifier.border(2.dp, Color.White, CircleShape)
+                                    else Modifier
+                                )
+                                .clickable { selectedColor = hex }
+                        )
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        IconButton(
+                            onClick = { imageLauncher.launch("image/*") },
+                            modifier = Modifier.size(48.dp).clip(CircleShape).background(Color.White.copy(0.2f))
+                        ) {
+                            Icon(Icons.Default.Image, null, tint = Color.White)
+                        }
+                        Text("Photo", color = Color.White, fontSize = 11.sp)
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        IconButton(
+                            onClick = { videoLauncher.launch("video/*") },
+                            modifier = Modifier.size(48.dp).clip(CircleShape).background(Color.White.copy(0.2f))
+                        ) {
+                            Icon(Icons.Default.Videocam, null, tint = Color.White)
+                        }
+                        Text("Video", color = Color.White, fontSize = 11.sp)
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        IconButton(
+                            onClick = { musicLauncher.launch("audio/*") },
+                            modifier = Modifier.size(48.dp).clip(CircleShape).background(Color.White.copy(0.2f))
+                        ) {
+                            Icon(Icons.Default.MusicNote, null, tint = Color.White)
+                        }
+                        Text(
+                            musicName?.take(10) ?: "Music",
+                            color = Color.White,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+                Spacer(Modifier.height(24.dp))
             }
-        )
+        }
     }
 
-    // Full-screen status viewer
+    // Viewer with real video play
     viewerList?.let { list ->
         if (list.isEmpty()) return@let
         val item = list.getOrNull(viewerIndex) ?: list.first()
@@ -348,10 +435,6 @@ fun StatusTab(
                             else -> Color.Black
                         }
                     )
-                    .clickable {
-                        if (viewerIndex < list.lastIndex) viewerIndex++
-                        else viewerList = null
-                    }
             ) {
                 when (item.type) {
                     StatusType.IMAGE -> {
@@ -359,25 +442,23 @@ fun StatusTab(
                             model = item.mediaUrl,
                             contentDescription = "Status photo",
                             contentScale = ContentScale.Fit,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clickable {
+                                    if (viewerIndex < list.lastIndex) viewerIndex++
+                                    else viewerList = null
+                                }
                         )
                     }
                     StatusType.VIDEO -> {
-                        // Thumbnail + label (full video player can be added with ExoPlayer later)
-                        AsyncImage(
-                            model = item.mediaUrl,
-                            contentDescription = "Status video",
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                        Text(
-                            "▶ Video status",
-                            color = Color.White,
-                            modifier = Modifier
-                                .align(Alignment.Center)
-                                .background(Color.Black.copy(0.4f), RoundedCornerShape(8.dp))
-                                .padding(12.dp)
-                        )
+                        if (!item.mediaUrl.isNullOrBlank()) {
+                            PulsePlayer(
+                                streamUrl = item.mediaUrl!!,
+                                autoPlay = true,
+                                showControls = true,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
                     }
                     StatusType.TEXT -> {
                         Text(
@@ -389,11 +470,14 @@ fun StatusTab(
                             modifier = Modifier
                                 .align(Alignment.Center)
                                 .padding(32.dp)
+                                .clickable {
+                                    if (viewerIndex < list.lastIndex) viewerIndex++
+                                    else viewerList = null
+                                }
                         )
                     }
                 }
 
-                // Top bar: progress dots + close + edit/delete for own
                 Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -450,18 +534,6 @@ fun StatusTab(
                             Icon(Icons.Default.Close, "Close", tint = Color.White)
                         }
                     }
-                }
-
-                if (!item.text.isNullOrBlank() && item.type != StatusType.TEXT) {
-                    Text(
-                        item.text!!,
-                        color = Color.White,
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(24.dp)
-                            .background(Color.Black.copy(0.35f), RoundedCornerShape(8.dp))
-                            .padding(12.dp)
-                    )
                 }
             }
         }
