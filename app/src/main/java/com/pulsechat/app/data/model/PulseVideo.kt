@@ -6,84 +6,65 @@ data class PulseVideo(
     val channel: String,
     val thumbnailUrl: String,
     val views: String,
+    /** Direct MP4 URL for custom ExoPlayer (no YouTube chrome). */
+    val streamUrl: String,
     val isShort: Boolean = false
-) {
-    val watchUrl: String get() = "https://www.youtube.com/watch?v=$id"
-    val shortUrl: String get() = "https://www.youtube.com/shorts/$id"
-}
+)
 
 object PulseFeed {
-    /**
-     * Public videos that generally allow embedding.
-     * Avoid restricted / music-label videos that show "Video unavailable" in WebView.
-     */
+    /** Google sample + open movies — play reliably in ExoPlayer. */
     val homeVideos: List<PulseVideo> = listOf(
         PulseVideo(
-            "aqz-KE-bpKQ",
-            "Big Buck Bunny",
-            "Blender Foundation",
-            "https://i.ytimg.com/vi/aqz-KE-bpKQ/hqdefault.jpg",
-            "Open movie"
+            id = "bbb",
+            title = "Big Buck Bunny",
+            channel = "Blender Foundation",
+            thumbnailUrl = "https://i.ytimg.com/vi/aqz-KE-bpKQ/hqdefault.jpg",
+            views = "Open movie",
+            streamUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
         ),
         PulseVideo(
-            "eRsGyueVLvQ",
-            "Sintel — Open Movie",
-            "Blender Foundation",
-            "https://i.ytimg.com/vi/eRsGyueVLvQ/hqdefault.jpg",
-            "Open movie"
+            id = "elephants",
+            title = "Elephant Dream",
+            channel = "Blender Foundation",
+            thumbnailUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/ElephantsDream.jpg",
+            views = "Open movie",
+            streamUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
         ),
         PulseVideo(
-            "YE7VzlLtp-4",
-            "Big Buck Bunny 1080p",
-            "Blender",
-            "https://i.ytimg.com/vi/YE7VzlLtp-4/hqdefault.jpg",
-            "Open movie"
+            id = "sintel",
+            title = "Sintel",
+            channel = "Blender Foundation",
+            thumbnailUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/Sintel.jpg",
+            views = "Open movie",
+            streamUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4"
         ),
         PulseVideo(
-            "ScMzIvxBSi4",
-            "Nature Relaxation — 4K",
-            "Nature",
-            "https://i.ytimg.com/vi/ScMzIvxBSi4/hqdefault.jpg",
-            "Relax"
+            id = "tears",
+            title = "Tears of Steel",
+            channel = "Blender Foundation",
+            thumbnailUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/TearsOfSteel.jpg",
+            views = "Open movie",
+            streamUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
         ),
         PulseVideo(
-            "LXb3EKWsInQ",
-            "Costa Rica in 4K",
-            "Jacob + Katie Schwarz",
-            "https://i.ytimg.com/vi/LXb3EKWsInQ/hqdefault.jpg",
-            "Travel"
+            id = "subaru",
+            title = "Subaru Outback On Street",
+            channel = "Google Samples",
+            thumbnailUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/SubaruOutbackOnStreetAndDirt.jpg",
+            views = "Sample",
+            streamUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4"
         ),
         PulseVideo(
-            "dQw4w9WgXcQ",
-            "Never Gonna Give You Up",
-            "Rick Astley",
-            "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
-            "Classic"
-        ),
-        PulseVideo(
-            "jNQXAC9IVRw",
-            "Me at the zoo",
-            "jawed",
-            "https://i.ytimg.com/vi/jNQXAC9IVRw/hqdefault.jpg",
-            "First YouTube video"
-        ),
-        PulseVideo(
-            "M7lc1UVf-VE",
-            "YouTube Developers Live",
-            "Google Developers",
-            "https://i.ytimg.com/vi/M7lc1UVf-VE/hqdefault.jpg",
-            "API demo"
+            id = "forbigger",
+            title = "For Bigger Blazes",
+            channel = "Google Samples",
+            thumbnailUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/ForBiggerBlazes.jpg",
+            views = "Sample",
+            streamUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
         )
     )
 
-    val shorts: List<PulseVideo> = listOf(
-        PulseVideo("aqz-KE-bpKQ", "Big Buck Bunny", "Blender", "https://i.ytimg.com/vi/aqz-KE-bpKQ/hqdefault.jpg", "Open", true),
-        PulseVideo("eRsGyueVLvQ", "Sintel", "Blender", "https://i.ytimg.com/vi/eRsGyueVLvQ/hqdefault.jpg", "Open", true),
-        PulseVideo("YE7VzlLtp-4", "Bunny 1080p", "Blender", "https://i.ytimg.com/vi/YE7VzlLtp-4/hqdefault.jpg", "Open", true),
-        PulseVideo("ScMzIvxBSi4", "Nature 4K", "Nature", "https://i.ytimg.com/vi/ScMzIvxBSi4/hqdefault.jpg", "Relax", true),
-        PulseVideo("LXb3EKWsInQ", "Costa Rica", "Travel", "https://i.ytimg.com/vi/LXb3EKWsInQ/hqdefault.jpg", "Travel", true),
-        PulseVideo("dQw4w9WgXcQ", "Rick Roll", "Rick Astley", "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg", "Classic", true),
-        PulseVideo("jNQXAC9IVRw", "Zoo", "jawed", "https://i.ytimg.com/vi/jNQXAC9IVRw/hqdefault.jpg", "First", true),
-        PulseVideo("M7lc1UVf-VE", "YouTube API", "Google", "https://i.ytimg.com/vi/M7lc1UVf-VE/hqdefault.jpg", "Dev", true)
-    )
+    val shorts: List<PulseVideo> = homeVideos.map {
+        it.copy(isShort = true, id = "short_${it.id}")
+    }
 }

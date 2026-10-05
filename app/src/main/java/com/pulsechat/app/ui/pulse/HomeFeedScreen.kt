@@ -2,7 +2,6 @@ package com.pulsechat.app.ui.pulse
 
 import android.app.Activity
 import android.content.Intent
-import android.net.Uri
 import android.view.WindowManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -10,27 +9,26 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -57,23 +55,30 @@ import com.pulsechat.app.data.model.PulseFeed
 import com.pulsechat.app.data.model.PulseVideo
 import com.pulsechat.app.ui.theme.PulsePurple
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeFeedScreen(modifier: Modifier = Modifier) {
     var playing by remember { mutableStateOf<PulseVideo?>(null) }
     val context = LocalContext.current
 
-    Column(modifier = modifier.fillMaxSize().background(Color(0xFF0A0A0C))) {
-        TopAppBar(
-            title = { Text("Pulse", fontWeight = FontWeight.Bold, color = Color.White) },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF121218))
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color(0xFF0A0A0C))
+            .windowInsetsPadding(WindowInsets.statusBars)
+    ) {
+        Text(
+            "Pulse",
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+            fontSize = 22.sp,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
         )
 
         LazyColumn(modifier = Modifier.fillMaxSize()) {
             items(PulseFeed.homeVideos, key = { it.id }) { video ->
                 VideoCard(video = video, onClick = { playing = video })
             }
-            item { Spacer(Modifier.height(80.dp)) }
+            item { Spacer(Modifier.height(24.dp)) }
         }
     }
 
@@ -84,12 +89,9 @@ fun HomeFeedScreen(modifier: Modifier = Modifier) {
             onShare = {
                 val intent = Intent(Intent.ACTION_SEND).apply {
                     type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, "${video.title}\n${video.watchUrl}")
+                    putExtra(Intent.EXTRA_TEXT, "${video.title} — Watch on Pulse Chat")
                 }
                 context.startActivity(Intent.createChooser(intent, "Share"))
-            },
-            onOpenExternal = {
-                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(video.watchUrl)))
             }
         )
     }
@@ -101,7 +103,7 @@ private fun VideoCard(video: PulseVideo, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(bottom = 16.dp)
+            .padding(bottom = 12.dp)
     ) {
         Box {
             AsyncImage(
@@ -115,12 +117,12 @@ private fun VideoCard(video: PulseVideo, onClick: () -> Unit) {
             Box(
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .size(56.dp)
-                    .clip(RoundedCornerShape(28.dp))
-                    .background(Color.Black.copy(alpha = 0.55f)),
+                    .size(52.dp)
+                    .clip(RoundedCornerShape(26.dp))
+                    .background(PulsePurple.copy(alpha = 0.9f)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.PlayArrow, null, tint = Color.White, modifier = Modifier.size(36.dp))
+                Icon(Icons.Default.PlayArrow, null, tint = Color.White, modifier = Modifier.size(32.dp))
             }
         }
         Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
@@ -150,8 +152,7 @@ private fun VideoCard(video: PulseVideo, onClick: () -> Unit) {
 private fun TheaterPlayer(
     video: PulseVideo,
     onClose: () -> Unit,
-    onShare: () -> Unit,
-    onOpenExternal: () -> Unit
+    onShare: () -> Unit
 ) {
     val view = LocalView.current
     val activity = view.context as? Activity
@@ -185,8 +186,10 @@ private fun TheaterPlayer(
                 .fillMaxSize()
                 .background(Color.Black)
         ) {
-            YoutubePlayer(
-                videoId = video.id,
+            PulsePlayer(
+                streamUrl = video.streamUrl,
+                autoPlay = true,
+                showControls = true,
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.Center)
@@ -197,7 +200,7 @@ private fun TheaterPlayer(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.TopCenter)
-                    .padding(8.dp),
+                    .padding(top = 8.dp, start = 4.dp, end = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onClose) {
@@ -210,9 +213,6 @@ private fun TheaterPlayer(
                     maxLines = 1,
                     modifier = Modifier.weight(1f)
                 )
-                IconButton(onClick = onOpenExternal) {
-                    Icon(Icons.Default.OpenInNew, "Open in YouTube", tint = Color.White)
-                }
                 IconButton(onClick = onShare) {
                     Icon(Icons.Default.Share, "Share", tint = Color.White)
                 }

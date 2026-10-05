@@ -1,7 +1,6 @@
 package com.pulsechat.app.ui.pulse
 
 import android.content.Intent
-import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -17,21 +16,27 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,6 +50,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.media3.ui.AspectRatioFrameLayout
 import com.pulsechat.app.data.model.PulseFeed
 import com.pulsechat.app.data.model.PulseVideo
 
@@ -55,6 +61,9 @@ fun ShortsScreen(modifier: Modifier = Modifier) {
     val pagerState = rememberPagerState(pageCount = { videos.size })
     val likes = remember { mutableStateMapOf<String, Boolean>() }
     val saves = remember { mutableStateMapOf<String, Boolean>() }
+    val comments = remember { mutableStateMapOf<String, MutableList<String>>() }
+    var commentFor by remember { mutableStateOf<PulseVideo?>(null) }
+    var commentText by remember { mutableStateOf("") }
     val context = LocalContext.current
     val view = LocalView.current
 
@@ -79,10 +88,12 @@ fun ShortsScreen(modifier: Modifier = Modifier) {
             modifier = Modifier.fillMaxSize()
         ) { page ->
             val video = videos[page]
+            val commentList = comments[video.id] ?: emptyList()
             ShortPage(
                 video = video,
                 liked = likes[video.id] == true,
                 saved = saves[video.id] == true,
+                commentCount = commentList.size,
                 onLike = { likes[video.id] = !(likes[video.id] ?: false) },
                 onSave = {
                     saves[video.id] = !(saves[video.id] ?: false)
@@ -92,21 +103,53 @@ fun ShortsScreen(modifier: Modifier = Modifier) {
                         Toast.LENGTH_SHORT
                     ).show()
                 },
-                onComment = {
-                    Toast.makeText(context, "Comments coming soon", Toast.LENGTH_SHORT).show()
-                },
+                onComment = { commentFor = video },
                 onShare = {
                     val intent = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
-                        putExtra(Intent.EXTRA_TEXT, "${video.title}\n${video.watchUrl}")
+                        putExtra(Intent.EXTRA_TEXT, "${video.title} on Pulse Chat")
                     }
                     context.startActivity(Intent.createChooser(intent, "Share Short"))
-                },
-                onOpenExternal = {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(video.watchUrl)))
                 }
             )
         }
+    }
+
+    commentFor?.let { video ->
+        val list = comments.getOrPut(video.id) { mutableListOf() }
+        AlertDialog(
+            onDismissRequest = { commentFor = null },
+            title = { Text("Comments (${list.size})") },
+            text = {
+                Column {
+                    if (list.isEmpty()) {
+                        Text("No comments yet. Be the first!")
+                    } else {
+                        list.takeLast(8).forEach { c ->
+                            Text("• $c", modifier = Modifier.padding(vertical = 2.dp))
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = commentText,
+                        onValueChange = { commentText = it },
+                        placeholder = { Text("Add a comment…") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (commentText.isNotBlank()) {
+                        list.add(commentText.trim())
+                        commentText = ""
+                    }
+                }) { Text("Post") }
+            },
+            dismissButton = {
+                TextButton(onClick = { commentFor = null }) { Text("Close") }
+            }
+        )
     }
 }
 
@@ -115,24 +158,28 @@ private fun ShortPage(
     video: PulseVideo,
     liked: Boolean,
     saved: Boolean,
+    commentCount: Int,
     onLike: () -> Unit,
     onSave: () -> Unit,
     onComment: () -> Unit,
-    onShare: () -> Unit,
-    onOpenExternal: () -> Unit
+    onShare: () -> Unit
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
-        YoutubeShortPlayer(
-            videoId = video.id,
+        PulsePlayer(
+            streamUrl = video.streamUrl,
+            autoPlay = true,
+            showControls = false,
+            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM,
             modifier = Modifier.fillMaxSize()
         )
 
+        // Actions lower — near bottom-right
         Column(
             modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .padding(end = 12.dp, bottom = 80.dp),
+                .align(Alignment.BottomEnd)
+                .padding(end = 12.dp, bottom = 100.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             ShortAction(
                 icon = if (liked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
@@ -142,7 +189,7 @@ private fun ShortPage(
             )
             ShortAction(
                 icon = Icons.Default.ChatBubbleOutline,
-                label = "Comment",
+                label = if (commentCount > 0) "$commentCount" else "Comment",
                 onClick = onComment
             )
             ShortAction(
@@ -156,18 +203,13 @@ private fun ShortPage(
                 tint = if (saved) Color(0xFFFFD54F) else Color.White,
                 onClick = onSave
             )
-            ShortAction(
-                icon = Icons.Default.OpenInNew,
-                label = "YouTube",
-                onClick = onOpenExternal
-            )
         }
 
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .fillMaxWidth()
-                .padding(start = 16.dp, end = 72.dp, bottom = 24.dp)
+                .padding(start = 16.dp, end = 80.dp, bottom = 28.dp)
         ) {
             Text(
                 "@${video.channel}",
@@ -177,7 +219,6 @@ private fun ShortPage(
             )
             Spacer(Modifier.height(4.dp))
             Text(video.title, color = Color.White, fontSize = 14.sp, maxLines = 2)
-            Text(video.views, color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
         }
     }
 }
