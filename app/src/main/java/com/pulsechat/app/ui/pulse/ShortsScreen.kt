@@ -1,6 +1,7 @@
 package com.pulsechat.app.ui.pulse
 
 import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -22,6 +23,7 @@ import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -99,6 +101,9 @@ fun ShortsScreen(modifier: Modifier = Modifier) {
                         putExtra(Intent.EXTRA_TEXT, "${video.title}\n${video.watchUrl}")
                     }
                     context.startActivity(Intent.createChooser(intent, "Share Short"))
+                },
+                onOpenExternal = {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(video.watchUrl)))
                 }
             )
         }
@@ -113,11 +118,12 @@ private fun ShortPage(
     onLike: () -> Unit,
     onSave: () -> Unit,
     onComment: () -> Unit,
-    onShare: () -> Unit
+    onShare: () -> Unit,
+    onOpenExternal: () -> Unit
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         YoutubeShortPlayer(
-            embedUrl = video.embedUrl,
+            videoId = video.id,
             modifier = Modifier.fillMaxSize()
         )
 
@@ -149,6 +155,11 @@ private fun ShortPage(
                 label = if (saved) "Saved" else "Save",
                 tint = if (saved) Color(0xFFFFD54F) else Color.White,
                 onClick = onSave
+            )
+            ShortAction(
+                icon = Icons.Default.OpenInNew,
+                label = "YouTube",
+                onClick = onOpenExternal
             )
         }
 

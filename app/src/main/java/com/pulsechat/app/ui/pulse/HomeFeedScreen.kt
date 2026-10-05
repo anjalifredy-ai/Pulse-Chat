@@ -2,6 +2,7 @@ package com.pulsechat.app.ui.pulse
 
 import android.app.Activity
 import android.content.Intent
+import android.net.Uri
 import android.view.WindowManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -21,6 +22,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -85,6 +87,9 @@ fun HomeFeedScreen(modifier: Modifier = Modifier) {
                     putExtra(Intent.EXTRA_TEXT, "${video.title}\n${video.watchUrl}")
                 }
                 context.startActivity(Intent.createChooser(intent, "Share"))
+            },
+            onOpenExternal = {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(video.watchUrl)))
             }
         )
     }
@@ -145,7 +150,8 @@ private fun VideoCard(video: PulseVideo, onClick: () -> Unit) {
 private fun TheaterPlayer(
     video: PulseVideo,
     onClose: () -> Unit,
-    onShare: () -> Unit
+    onShare: () -> Unit,
+    onOpenExternal: () -> Unit
 ) {
     val view = LocalView.current
     val activity = view.context as? Activity
@@ -180,7 +186,7 @@ private fun TheaterPlayer(
                 .background(Color.Black)
         ) {
             YoutubePlayer(
-                embedUrl = video.embedUrl,
+                videoId = video.id,
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.Center)
@@ -204,6 +210,9 @@ private fun TheaterPlayer(
                     maxLines = 1,
                     modifier = Modifier.weight(1f)
                 )
+                IconButton(onClick = onOpenExternal) {
+                    Icon(Icons.Default.OpenInNew, "Open in YouTube", tint = Color.White)
+                }
                 IconButton(onClick = onShare) {
                     Icon(Icons.Default.Share, "Share", tint = Color.White)
                 }
