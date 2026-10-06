@@ -1,15 +1,17 @@
 package com.pulsechat.app.data.model
 
 import com.google.firebase.firestore.DocumentId
-import com.google.firebase.firestore.ServerTimestamp
 import java.util.Date
 
 data class User(
     @DocumentId
     val uid: String = "",
-    val phoneNumber: String = "",
+    val phoneNumber: String = "", // also used for email on email login
     val displayName: String = "",
+    /** Lowercase copy for search */
+    val displayNameLower: String = "",
     val username: String? = null,
+    val usernameLower: String? = null,
     val about: String = "Hey there! I am using Pulse Chat.",
     val photoUrl: String? = null,
     val fcmTokens: List<String> = emptyList(),

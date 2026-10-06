@@ -28,7 +28,6 @@ class AuthRepository @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     companion object {
-        // From google-services.json oauth_client client_type 3 (Web)
         private const val WEB_CLIENT_ID =
             "225740234992-f1lr0gucd5ktb3vu26ee06no1et0hhmd.apps.googleusercontent.com"
     }
@@ -39,7 +38,7 @@ class AuthRepository @Inject constructor(
         val fbUser = auth.currentUser ?: return null
         return try {
             val snap = firestore.collection("users").document(fbUser.uid).get().await()
-            snap.toObject(User::class.java)
+            snap.toObject(User::class.java)?.copy(uid = fbUser.uid)
         } catch (e: Exception) {
             null
         }
@@ -62,15 +61,11 @@ class AuthRepository @Inject constructor(
 
     suspend fun signInWithGoogle(data: Intent?): Result<User> {
         return try {
-            if (data == null) {
-                return Result.failure(Exception("Google sign-in cancelled"))
-            }
+            if (data == null) return Result.failure(Exception("Google sign-in cancelled"))
             val task = GoogleSignIn.getSignedInAccountFromIntent(data)
             val account = task.getResult(ApiException::class.java)
             val idToken = account.idToken
-                ?: return Result.failure(
-                    Exception("No ID token. Add SHA-1 in Firebase (see GOOGLE_LOGIN.md)")
-                )
+                ?: return Result.failure(Exception("No ID token. Add SHA-1 in Firebase."))
             val credential = GoogleAuthProvider.getCredential(idToken, null)
             val result = auth.signInWithCredential(credential).await()
             val fbUser = result.user ?: return Result.failure(Exception("No user"))
@@ -84,7 +79,7 @@ class AuthRepository @Inject constructor(
             )
         } catch (e: ApiException) {
             val msg = when (e.statusCode) {
-                10 -> "Google Error 10: Firebase mein SHA-1 add karo (GOOGLE_LOGIN.md). Email se login karo."
+                10 -> "Google Error 10: Firebase mein SHA-1 add karo. Email se login karo."
                 12501 -> "Google sign-in cancelled"
                 7 -> "Network error. Check internet."
                 else -> "Google failed (code ${e.statusCode}). Use Email login."
@@ -99,7 +94,9 @@ class AuthRepository @Inject constructor(
         return try {
             val result = auth.signInWithEmailAndPassword(email.trim(), password).await()
             val fbUser = result.user ?: return Result.failure(Exception("No user"))
-            Result.success(ensureUserDoc(fbUser.uid, fbUser.email, fbUser.displayName, fbUser.photoUrl?.toString()))
+            Result.success(
+                ensureUserDoc(fbUser.uid, fbUser.email, fbUser.displayName, fbUser.photoUrl?.toString())
+            )
         } catch (e: Exception) {
             Result.failure(Exception(friendlyAuthError(e)))
         }
@@ -132,11 +129,26 @@ class AuthRepository @Inject constructor(
         return when {
             m.contains("PASSWORD", ignoreCase = true) -> "Password must be at least 6 characters"
             m.contains("EMAIL", ignoreCase = true) && m.contains("EXIST", ignoreCase = true) ->
-                "Account already exists. Tap Sign in below."
+                "Account already exists. Tap Sign in."
             m.contains("INVALID", ignoreCase = true) -> "Wrong email or password"
             m.contains("NETWORK", ignoreCase = true) -> "Network error. Check internet."
             else -> m.ifBlank { "Login failed" }
         }
+    }
+
+    private fun makeUsername(displayName: String?, email: String?, uid: String): String {
+        val base = when {
+            !displayName.isNullOrBlank() -> displayName.trim()
+                .lowercase()
+                .replace(Regex("[^a-z0-9_]"), "")
+                .take(16)
+            !email.isNullOrBlank() -> email.substringBefore("@")
+                .lowercase()
+                .replace(Regex("[^a-z0-9_]"), "")
+                .take(16)
+            else -> "user"
+        }.ifBlank { "user" }
+        return base + uid.takeLast(4)
     }
 
     private suspend fun ensureUserDoc(
@@ -147,13 +159,41 @@ class AuthRepository @Inject constructor(
     ): User {
         val userRef = firestore.collection("users").document(uid)
         val existing = userRef.get().await()
+        val name = displayName?.trim().orEmpty()
+        val username = makeUsername(name.ifBlank { null }, email, uid)
+
         if (existing.exists()) {
-            return existing.toObject(User::class.java) ?: User(uid = uid)
+            // Patch missing search fields so old accounts also become searchable
+            val updates = mutableMapOf<String, Any>()
+            val curName = existing.getString("displayName").orEmpty()
+            if (curName.isBlank() && name.isNotBlank()) {
+                updates["displayName"] = name
+                updates["displayNameLower"] = name.lowercase()
+            } else if (existing.getString("displayNameLower").isNullOrBlank() && curName.isNotBlank()) {
+                updates["displayNameLower"] = curName.lowercase()
+            }
+            if (existing.getString("username").isNullOrBlank()) {
+                updates["username"] = username
+                updates["usernameLower"] = username.lowercase()
+            }
+            if (existing.getString("phoneNumber").isNullOrBlank() && !email.isNullOrBlank()) {
+                updates["phoneNumber"] = email
+            }
+            if (updates.isNotEmpty()) {
+                updates["updatedAt"] = Date()
+                userRef.update(updates).await()
+            }
+            return userRef.get().await().toObject(User::class.java)?.copy(uid = uid)
+                ?: User(uid = uid, displayName = name, username = username)
         }
+
         val newUser = User(
             uid = uid,
             phoneNumber = email ?: "",
-            displayName = displayName.orEmpty(),
+            displayName = name.ifBlank { email?.substringBefore("@") ?: "User" },
+            displayNameLower = name.ifBlank { email?.substringBefore("@") ?: "user" }.lowercase(),
+            username = username,
+            usernameLower = username.lowercase(),
             about = "Hey there! I am using Pulse Chat.",
             photoUrl = photoUrl,
             createdAt = Date(),
@@ -181,13 +221,21 @@ class AuthRepository @Inject constructor(
                 .apply { if (photoUrl != null) setPhotoUri(Uri.parse(photoUrl)) }
                 .build()
             fbUser.updateProfile(profileUpdates).await()
+
+            val username = makeUsername(displayName, fbUser.email, fbUser.uid)
             val updates = mutableMapOf<String, Any>(
                 "displayName" to displayName,
+                "displayNameLower" to displayName.lowercase(),
+                "username" to username,
+                "usernameLower" to username.lowercase(),
                 "about" to about,
                 "updatedAt" to Date()
             )
             if (photoUrl != null) updates["photoUrl"] = photoUrl
-            firestore.collection("users").document(fbUser.uid).update(updates).await()
+            firestore.collection("users").document(fbUser.uid).set(
+                updates,
+                com.google.firebase.firestore.SetOptions.merge()
+            ).await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)

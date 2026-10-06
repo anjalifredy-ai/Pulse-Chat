@@ -26,16 +26,36 @@ class NewChatViewModel @Inject constructor(
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
 
+    private val _loading = MutableStateFlow(false)
+    val loading: StateFlow<Boolean> = _loading.asStateFlow()
+
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
     fun loadContacts() {
         viewModelScope.launch {
-            _users.value = contactRepository.getAllUsers()
+            _loading.value = true
+            _error.value = null
+            val list = contactRepository.getAllUsers()
+            _users.value = list
+            if (list.isEmpty() && contactRepository.lastError != null) {
+                _error.value = contactRepository.lastError
+            }
+            _loading.value = false
         }
     }
 
     fun search(q: String) {
         _query.value = q
         viewModelScope.launch {
-            _users.value = contactRepository.searchUsers(q)
+            _loading.value = true
+            _error.value = null
+            val list = contactRepository.searchUsers(q)
+            _users.value = list
+            if (list.isEmpty() && contactRepository.lastError != null) {
+                _error.value = contactRepository.lastError
+            }
+            _loading.value = false
         }
     }
 
