@@ -21,10 +21,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -39,9 +43,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -58,7 +64,31 @@ import com.pulsechat.app.ui.theme.PulsePurple
 @Composable
 fun HomeFeedScreen(modifier: Modifier = Modifier) {
     var playing by remember { mutableStateOf<PulseVideo?>(null) }
+    var searchQuery by remember { mutableStateOf("") }
+    var channelId by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
+
+    val filtered = remember(searchQuery) { PulseFeed.search(searchQuery) }
+
+    // Channel view takes over home content
+    if (channelId != null) {
+        ChannelScreen(
+            channelId = channelId!!,
+            onBack = { channelId = null },
+            onPlay = { playing = it },
+            modifier = modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.statusBars)
+        )
+        playing?.let { video ->
+            TheaterPlayer(
+                video = video,
+                onClose = { playing = null },
+                onShare = { shareVideo(context, video) }
+            )
+        }
+        return
+    }
 
     Column(
         modifier = modifier
@@ -66,19 +96,97 @@ fun HomeFeedScreen(modifier: Modifier = Modifier) {
             .background(Color(0xFF0A0A0C))
             .windowInsetsPadding(WindowInsets.statusBars)
     ) {
+        // Title + search
         Text(
             "Pulse",
             fontWeight = FontWeight.Bold,
             color = Color.White,
             fontSize = 22.sp,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp)
         )
 
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
-            items(PulseFeed.homeVideos, key = { it.id }) { video ->
-                VideoCard(video = video, onClick = { playing = video })
+        SearchBar(
+            query = searchQuery,
+            onQueryChange = { searchQuery = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp)
+        )
+
+        // Channels strip
+        if (searchQuery.isBlank()) {
+            Text(
+                "Channels",
+                color = Color.White.copy(alpha = 0.55f),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 8.dp)
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp)
+            ) {
+                PulseFeed.channels.forEach { ch ->
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .padding(horizontal = 8.dp)
+                            .clickable { channelId = ch.id }
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(52.dp)
+                                .clip(CircleShape)
+                                .background(Color(ch.avatarColor)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                ch.name.take(1).uppercase(),
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp
+                            )
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            ch.name.split(" ").first(),
+                            color = Color.White.copy(alpha = 0.8f),
+                            fontSize = 11.sp,
+                            maxLines = 1
+                        )
+                    }
+                }
             }
-            item { Spacer(Modifier.height(24.dp)) }
+            Spacer(Modifier.height(8.dp))
+        }
+
+        Text(
+            if (searchQuery.isBlank()) "Videos" else "Results (${filtered.size})",
+            color = Color.White.copy(alpha = 0.55f),
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+        )
+
+        if (filtered.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("No videos found", color = Color.White.copy(alpha = 0.5f))
+            }
+        } else {
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                items(filtered, key = { it.id }) { video ->
+                    VideoCard(
+                        video = video,
+                        onClick = { playing = video },
+                        onChannelClick = { channelId = video.channelId }
+                    )
+                }
+                item { Spacer(Modifier.height(24.dp)) }
+            }
         }
     }
 
@@ -86,26 +194,60 @@ fun HomeFeedScreen(modifier: Modifier = Modifier) {
         TheaterPlayer(
             video = video,
             onClose = { playing = null },
-            onShare = {
-                val intent = Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, "${video.title} — Watch on Pulse Chat")
-                }
-                context.startActivity(Intent.createChooser(intent, "Share"))
-            }
+            onShare = { shareVideo(context, video) }
         )
     }
 }
 
 @Composable
-private fun VideoCard(video: PulseVideo, onClick: () -> Unit) {
+private fun SearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(24.dp))
+            .background(Color(0xFF1E1E26))
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Default.Search, null, tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(10.dp))
+        BasicTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            singleLine = true,
+            textStyle = TextStyle(color = Color.White, fontSize = 15.sp),
+            cursorBrush = SolidColor(PulsePurple),
+            modifier = Modifier.weight(1f),
+            decorationBox = { inner ->
+                if (query.isEmpty()) {
+                    Text("Search videos, channels…", color = Color.White.copy(alpha = 0.35f), fontSize = 15.sp)
+                }
+                inner()
+            }
+        )
+        if (query.isNotEmpty()) {
+            IconButton(onClick = { onQueryChange("") }, modifier = Modifier.size(28.dp)) {
+                Icon(Icons.Default.Clear, "Clear", tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun VideoCard(
+    video: PulseVideo,
+    onClick: () -> Unit,
+    onChannelClick: () -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
             .padding(bottom = 12.dp)
     ) {
-        Box {
+        Box(modifier = Modifier.clickable(onClick = onClick)) {
             AsyncImage(
                 model = video.thumbnailUrl,
                 contentDescription = video.title,
@@ -129,19 +271,27 @@ private fun VideoCard(video: PulseVideo, onClick: () -> Unit) {
             Box(
                 modifier = Modifier
                     .size(40.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(PulsePurple),
+                    .clip(CircleShape)
+                    .background(PulsePurple)
+                    .clickable(onClick = onChannelClick),
                 contentAlignment = Alignment.Center
             ) {
                 Text(video.channel.take(1).uppercase(), color = Color.White, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.width(10.dp))
             Column {
-                Text(video.title, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 2)
+                Text(
+                    video.title,
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    modifier = Modifier.clickable(onClick = onClick)
+                )
                 Text(
                     "${video.channel} · ${video.views}",
                     color = Color.White.copy(alpha = 0.5f),
-                    fontSize = 13.sp
+                    fontSize = 13.sp,
+                    modifier = Modifier.clickable(onClick = onChannelClick)
                 )
             }
         }
@@ -219,4 +369,12 @@ private fun TheaterPlayer(
             }
         }
     }
+}
+
+private fun shareVideo(context: android.content.Context, video: PulseVideo) {
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, "${video.title} — Watch on Pulse Chat")
+    }
+    context.startActivity(Intent.createChooser(intent, "Share"))
 }
